@@ -1,3 +1,26 @@
+# Dependency directories
 node_modules/
-backup/
+
+# Environment files
 .env
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# Logs and backups
+*.log
+backup/
+*.bak
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDEs/editors
+.vscode/
+.idea/
+
+# Misc
+*.swp
