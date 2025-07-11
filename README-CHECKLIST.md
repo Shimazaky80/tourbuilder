@@ -1,14 +1,8 @@
 \# 🧾 README Update Checklist
 
-
-
 Keep this checklist handy to ensure your documentation stays accurate, helpful, and professional as your project evolves.
 
-
-
 ---
-
-
 
 \## 📌 Project Metadata
 
@@ -18,11 +12,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] Tech stack section reflects any new tools or architecture
 
-
-
 ---
-
-
 
 \## ⚙️ Installation \& Setup
 
@@ -32,11 +22,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] Setup steps tested on a clean machine or fresh clone
 
-
-
 ---
-
-
 
 \## 🚀 Usage Instructions
 
@@ -46,11 +32,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] Any GUI updates or key behavior changes reflected
 
-
-
 ---
-
-
 
 \## 🔄 Versioning \& Automation
 
@@ -60,11 +42,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] `CHANGELOG.md` synced or referenced
 
-
-
 ---
-
-
 
 \## 📃 License \& Contributor Info
 
@@ -74,11 +52,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] Contact info or links are still valid
 
-
-
 ---
-
-
 
 \## 🖼️ Visual Polish
 
@@ -88,11 +62,7 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] External links (docs, tools, demo) are still active
 
-
-
 ---
-
-
 
 \## 🔐 Privacy \& Security
 
@@ -100,11 +70,14 @@ Keep this checklist handy to ensure your documentation stays accurate, helpful, 
 
 \- \[ ] Clear note on what's intentionally untracked and why
 
-
-
 ---
 
+## TODO
 
+## 2025/07/10
+
+## 1. add feat: In-Place Dropdown Replacement
+
+## Changed script.js and style.css
 
 > ✅ Pro Tip: Update this checklist too if your documentation process changes.
-

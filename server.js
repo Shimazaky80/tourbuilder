@@ -321,8 +321,8 @@ app.get("/api/items", authMiddleware, async (req, res) => {
     let query = req.supabase
       .from("items")
       .select(
-        // Add max_occupancy from items and pricing_model from item_rates
-        `id, name, description, category, max_occupancy, supplier_id, suppliers!inner(id, name, is_active), item_rates!inner(id, rate_name, pricing_model, cost_per_person, currency_code, is_active)`
+        // Add max_occupancy from items and pricing_model/cost_per_unit from item_rates
+        `id, name, description, category, max_occupancy, supplier_id, suppliers!inner(id, name, is_active), item_rates!inner(id, rate_name, pricing_model, cost_per_person, cost_per_unit, currency_code, is_active)`
       )
       .eq("is_active", true)
       .eq("suppliers.is_active", true)

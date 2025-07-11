@@ -644,14 +644,6 @@ select {
   box-shadow: var(--shadow-md);
 }
 
-.sidebar .draggable-item::after {
-  content: " ($" attr(data-price) " pp)";
-  font-size: 0.8em;
-  color: var(--price-color);
-  margin-left: 5px;
-  font-weight: 500;
-}
-
 .sidebar .draggable-item[data-price="0"]::after,
 .sidebar .draggable-item:not([data-price])::after {
   content: "";
@@ -1424,15 +1416,6 @@ select {
   box-sizing: border-box;
   outline: none;
   color-scheme: dark;
-}
-
-.sidebar .draggable-item::after {
-  content: " (" attr(data-currency-symbol-display) attr(data-price) " pp)";
-  /* Use the new attribute */
-  font-size: 0.8em;
-  color: var(--price-color);
-  margin-left: 5px;
-  font-weight: 500;
 }
 
 /* Keep these to hide the price display if price is 0 or attribute is missing */

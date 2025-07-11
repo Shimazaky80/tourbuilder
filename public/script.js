@@ -1031,32 +1031,15 @@ function updateItemFinancialsDisplay(itemElement) {
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-  let costMultiplier = totalPax;
-  let units = 1;
-  let displayUnit = "pp";
+  let totalCost = 0;
+  let displayUnitText = "pp";
+  let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
 
   const warningDiv = itemElement.querySelector(".item-warning");
-  warningDiv.textContent = "";
+  warningDiv.innerHTML = "";
   itemElement.classList.remove("warning");
 
-  if (pricingModel === "per_unit") {
-    const itemCategory = itemElement.dataset.itemType;
-    // Logic for indivisible units like vehicles and tours
-    if (["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory)) {
-      costMultiplier = 1; // Always charge for 1 unit
-      displayUnit = "per unit";
-      if (maxOccupancy > 0 && totalPax > maxOccupancy) {
-        warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people.`;
-        itemElement.classList.add("warning");
-      }
-    } else {
-      // Fallback for other per_unit items, can be expanded later for rooms
-      costMultiplier = 1;
-      displayUnit = "per unit";
-    }
-  }
-
-  let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
+  // Apply markup to get the base selling price
   if (
     sellingPricePerBase === 0 &&
     costPerBase > 0 &&
@@ -1068,8 +1051,27 @@ function updateItemFinancialsDisplay(itemElement) {
     itemElement.dataset.sellingPrice = sellingPricePerBase.toFixed(2);
   }
 
-  const totalCost = costPerBase * costMultiplier;
-  const totalSell = sellingPricePerBase * costMultiplier;
+  // THIS IS THE CORRECTED LOGIC BLOCK
+  if (pricingModel === "per_unit") {
+    displayUnitText = "per unit";
+    totalCost = costPerBase; // Total cost is just the base cost for one unit
+
+    const itemCategory = itemElement.dataset.itemType;
+    if (["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory)) {
+      if (maxOccupancy > 0 && totalPax > maxOccupancy) {
+        warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
+        itemElement.classList.add("warning");
+      }
+    }
+  } else {
+    // per_person
+    displayUnitText = "pp";
+    totalCost = costPerBase * totalPax;
+  }
+
+  const totalSell =
+    sellingPricePerBase * (pricingModel === "per_unit" ? 1 : totalPax);
+  // END OF CORRECTED LOGIC BLOCK
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
   const sellingDisplaySpan = itemElement.querySelector(
@@ -1082,12 +1084,15 @@ function updateItemFinancialsDisplay(itemElement) {
     costDisplaySpan.textContent = `Cost: ${formatCurrency(
       costPerBase,
       currencyCode
-    )} ${displayUnit}`;
+    )} ${displayUnitText}`;
+
+  const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
   if (sellingDisplaySpan)
     sellingDisplaySpan.textContent = formatCurrency(
-      sellingPricePerBase,
+      perPersonSellEquivalent,
       currencyCode
     );
+
   if (totalItemCostSpan)
     totalItemCostSpan.textContent = `Total Cost: ${formatCurrency(
       totalCost,
@@ -1159,31 +1164,46 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
 const updateGrandTotal = () => {
   const wholesaleTotalsByCurrency = {};
   const sellingTotalsByCurrency = {};
-  const currentTotalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+  const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-  // 1. Group totals by currency
+  // 1. Group totals by currency, respecting the pricing model
   daysContainer?.querySelectorAll(".itinerary-item").forEach((itemEl) => {
     const currencyCode =
       itemEl.dataset.currencyCode || currentItineraryCurrency;
-    const costPerPerson = parseFloat(itemEl.dataset.costPrice) || 0;
-    const sellingPricePerPerson = parseFloat(itemEl.dataset.sellingPrice) || 0;
+    const pricingModel = itemEl.dataset.pricingModel || "per_person";
+    const costPerBase = parseFloat(itemEl.dataset.costPrice) || 0;
+
+    // Get the base selling price from the item's dataset
+    let sellingPricePerBase = parseFloat(itemEl.dataset.sellingPrice) || 0;
+
+    let itemTotalCost = 0;
+    let itemTotalSell = 0;
+
+    // THIS IS THE CORRECTED LOGIC
+    if (pricingModel === "per_unit") {
+      // For unit-priced items, the total is just the base price.
+      itemTotalCost = costPerBase;
+      itemTotalSell = sellingPricePerBase;
+    } else {
+      // For per-person items, multiply by the number of travelers.
+      itemTotalCost = costPerBase * totalPax;
+      itemTotalSell = sellingPricePerBase * totalPax;
+    }
 
     if (!wholesaleTotalsByCurrency[currencyCode]) {
       wholesaleTotalsByCurrency[currencyCode] = 0;
       sellingTotalsByCurrency[currencyCode] = 0;
     }
 
-    wholesaleTotalsByCurrency[currencyCode] += costPerPerson * currentTotalPax;
-    sellingTotalsByCurrency[currencyCode] +=
-      sellingPricePerPerson * currentTotalPax;
+    wholesaleTotalsByCurrency[currencyCode] += itemTotalCost;
+    sellingTotalsByCurrency[currencyCode] += itemTotalSell;
   });
 
-  // 2. Build the display strings
+  // 2. Build the display strings (This part is already correct)
   let wholesaleHtml = "";
   let sellingHtml = "";
   let profitLossHtml = "";
 
-  // Use the itinerary's primary currency as the first one in the list, if it exists
   const currencyOrder = [
     currentItineraryCurrency,
     ...Object.keys(wholesaleTotalsByCurrency).filter(
@@ -1227,10 +1247,10 @@ const updateGrandTotal = () => {
   if (grandTotalProfitLossValue) {
     grandTotalProfitLossValue.innerHTML =
       profitLossHtml ||
-      `<span class="profit">${formatCurrency(
+      `<div class="profit">${formatCurrency(
         0,
         currentItineraryCurrency
-      )}</span>`;
+      )}</div>`;
   }
 };
 
@@ -2075,10 +2095,11 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
               itemName: item.name,
               supplierName: item.suppliers.name,
               category: item.category,
-              maxOccupancy: item.max_occupancy, // <-- Add this
+              maxOccupancy: item.max_occupancy,
               itemRateId: chosenRate.id,
-              costPerPerson: chosenRate.cost_per_person,
-              pricingModel: chosenRate.pricing_model, // <-- Add this
+              // This is the key change: use either cost_per_person or cost_per_unit
+              cost: chosenRate.cost_per_person || chosenRate.cost_per_unit,
+              pricingModel: chosenRate.pricing_model,
               currencyCode: chosenRate.currency_code,
             });
           }
@@ -2094,19 +2115,22 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
         const itemDiv = document.createElement("div");
         itemDiv.className = "draggable-item";
         itemDiv.draggable = true;
+
+        // Store ALL necessary data on the element's dataset
+        const displayText = `${itemData.supplierName} - ${itemData.itemName}`;
+        itemDiv.dataset.displayText = displayText;
         itemDiv.dataset.itemId = itemData.itemId;
         itemDiv.dataset.itemRateId = itemData.itemRateId;
         itemDiv.dataset.itemType = itemData.category || "other";
+        itemDiv.dataset.price = (itemData.cost || "0").toString();
         itemDiv.dataset.pricingModel = itemData.pricingModel || "per_person";
         itemDiv.dataset.maxOccupancy = itemData.maxOccupancy || "0";
-        const displayText = `${itemData.supplierName || "Supplier?"} - ${
-          itemData.itemName || "Item?"
-        }`;
-        itemDiv.dataset.displayText = displayText;
-        itemDiv.dataset.price = (itemData.costPerPerson || "0").toString();
-        // We already have the symbol from the top of the function.
-        itemDiv.dataset.currencySymbolDisplay = symbolForThisFetch;
-        itemDiv.textContent = displayText;
+
+        // Dynamically create the correct label
+        let priceSuffix =
+          itemData.pricingModel === "per_unit" ? " per unit" : " pp";
+        itemDiv.innerHTML = `${displayText} <span style="color: var(--price-color); font-weight: 500;">(${symbolForThisFetch}${itemData.cost}${priceSuffix})</span>`;
+
         itemDiv.addEventListener("dragstart", handleDragStart);
         itemDiv.addEventListener("dragend", handleDragEnd);
         availableItemsList.appendChild(itemDiv);
