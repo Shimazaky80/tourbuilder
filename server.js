@@ -351,14 +351,17 @@ app.post("/api/rates/currencies", authMiddleware, async (req, res) => {
   try {
     const { data, error } = await req.supabase
       .from("item_rates")
-      .select("id, currency_code")
+      .select("id, currency_code, pricing_model") // <-- ADD pricing_model HERE
       .in("id", rateIds);
 
     if (error) throw error;
 
-    // Create a map for easy lookup on the client: { rate_id: 'CURRENCY_CODE' }
+    // Create a map that includes both currency and pricing model
     const currencyMap = Object.fromEntries(
-      data.map((r) => [r.id, r.currency_code])
+      data.map((r) => [
+        r.id,
+        { currency_code: r.currency_code, pricing_model: r.pricing_model },
+      ])
     );
     res.json(currencyMap);
   } catch (error) {

@@ -934,8 +934,8 @@ const loadItinerary = async (itineraryDbId) => {
           displayText: itm.item_text,
           item_rate_id: itm.item_rate_id,
           library_item_id: itm.library_item_id,
-          currencyCode: rateMeta.currency_code,
-          pricingModel: rateMeta.pricing_model,
+          currencyCode: rateMeta?.currency_code, // Use optional chaining
+          pricingModel: rateMeta?.pricing_model, // Use optional chaining
           maxOccupancy: itemMeta.max_occupancy,
         });
         dayItemsList.appendChild(itemElement);
@@ -1032,14 +1032,10 @@ function updateItemFinancialsDisplay(itemElement) {
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
   let totalCost = 0;
+  let totalSell = 0;
   let displayUnitText = "pp";
+
   let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
-
-  const warningDiv = itemElement.querySelector(".item-warning");
-  warningDiv.innerHTML = "";
-  itemElement.classList.remove("warning");
-
-  // Apply markup to get the base selling price
   if (
     sellingPricePerBase === 0 &&
     costPerBase > 0 &&
@@ -1051,27 +1047,31 @@ function updateItemFinancialsDisplay(itemElement) {
     itemElement.dataset.sellingPrice = sellingPricePerBase.toFixed(2);
   }
 
-  // THIS IS THE CORRECTED LOGIC BLOCK
   if (pricingModel === "per_unit") {
     displayUnitText = "per unit";
-    totalCost = costPerBase; // Total cost is just the base cost for one unit
-
-    const itemCategory = itemElement.dataset.itemType;
-    if (["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory)) {
-      if (maxOccupancy > 0 && totalPax > maxOccupancy) {
-        warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
-        itemElement.classList.add("warning");
-      }
-    }
+    totalCost = costPerBase;
+    totalSell = sellingPricePerBase;
   } else {
     // per_person
     displayUnitText = "pp";
     totalCost = costPerBase * totalPax;
+    totalSell = sellingPricePerBase * totalPax;
   }
 
-  const totalSell =
-    sellingPricePerBase * (pricingModel === "per_unit" ? 1 : totalPax);
-  // END OF CORRECTED LOGIC BLOCK
+  const warningDiv = itemElement.querySelector(".item-warning");
+  warningDiv.innerHTML = "";
+  itemElement.classList.remove("warning");
+
+  const itemCategory = itemElement.dataset.itemType;
+  if (
+    pricingModel === "per_unit" &&
+    ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory)
+  ) {
+    if (maxOccupancy > 0 && totalPax > maxOccupancy) {
+      warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
+      itemElement.classList.add("warning");
+    }
+  }
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
   const sellingDisplaySpan = itemElement.querySelector(
@@ -1587,7 +1587,9 @@ const handleNumPeopleChange = (event) => {
   }
 };
 const handleDaysContainerClick = (event) => {
-  if (event.target.classList.contains("remove-day-btn")) {
+  const target = event.target;
+
+  if (target.classList.contains("remove-day-btn")) {
     const dayToRemove = event.target.closest(".day");
     if (dayToRemove) {
       const dayTitle =
@@ -1598,34 +1600,115 @@ const handleDaysContainerClick = (event) => {
         saveItinerary();
       }
     }
-  } else if (event.target.classList.contains("delete-item-btn")) {
-    const itemToDelete = event.target.closest(".itinerary-item");
+  } else if (target.classList.contains("delete-item-btn")) {
+    const itemToDelete = target.closest(".itinerary-item");
     if (itemToDelete) {
       itemToDelete.remove();
       updateGrandTotal();
       saveItinerary();
     }
-  } else if (event.target.classList.contains("item-warning")) {
+  } else if (target.classList.contains("item-warning")) {
     const itemEl = event.target.closest(".itinerary-item");
-    if (itemEl) {
-      const currency = itemEl.dataset.currencyCode;
-      const text = itemEl.querySelector(".item-text")?.textContent || "";
-      // A safer way to get the item name, less prone to breaking
-      const itemName = text.substring(text.indexOf(" - ") + 3).trim();
+    if (!itemEl) return;
 
-      if (sidebarCurrencySelect.value !== currency) {
-        sidebarCurrencySelect.value = currency;
-      }
-      // We search for the item name, not the supplier name
-      itemSearchInput.value = itemName;
+    if (itemEl.querySelector(".item-replacement-container")) return;
 
-      // Trigger the search
-      fetchAndDisplayAvailableItems(itemName);
+    const currentItemId = itemEl.dataset.libraryItemId;
+    const currentCurrency = itemEl.dataset.currencyCode;
+    const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-      // Scroll to the sidebar and focus the input
-      itemSearchInput.focus();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    // THIS IS THE CORRECTED LOGIC
+    // 1. Find the original library item to get its exact supplierName
+    const originalItem = allAvailableLibraryItems.find(
+      (item) => item.itemId === currentItemId
+    );
+    if (!originalItem) {
+      target.textContent = "Could not find original item data.";
+      return;
     }
+    const supplierName = originalItem.supplierName;
+
+    // 2. Now filter using the correct supplierName
+    const replacementOptions = allAvailableLibraryItems.filter(
+      (item) =>
+        item.supplierName === supplierName &&
+        item.currencyCode === currentCurrency &&
+        (item.maxOccupancy === null || item.maxOccupancy >= totalPax) &&
+        item.itemId !== currentItemId
+    );
+
+    if (replacementOptions.length > 0) {
+      const container = document.createElement("div");
+      container.className = "item-replacement-container";
+
+      const label = document.createElement("label");
+      label.textContent = "Choose a suitable replacement:";
+
+      const select = document.createElement("select");
+      select.className = "item-replacement-select";
+      select.innerHTML = `<option value="">Select a vehicle...</option>`;
+
+      replacementOptions.forEach((opt) => {
+        select.innerHTML += `<option value="${opt.itemRateId}">${
+          opt.itemName
+        } (Max: ${opt.maxOccupancy || "N/A"}) - ${formatCurrency(
+          opt.cost,
+          opt.currencyCode
+        )}</option>`;
+      });
+
+      select.addEventListener("change", handleItemReplacement);
+
+      container.appendChild(label);
+      container.appendChild(select);
+      target.innerHTML = "";
+      target.appendChild(container);
+    } else {
+      target.textContent = "No suitable replacements found in this currency.";
+    }
+  }
+};
+
+const handleItemReplacement = async (event) => {
+  const selectElement = event.target;
+  const selectedOption = selectElement.options[selectElement.selectedIndex];
+  const oldItemElement = selectElement.closest(".itinerary-item");
+
+  if (!selectedOption.value || !oldItemElement) return;
+
+  showLoadingSpinner("Replacing item...");
+  try {
+    const newItemData = allAvailableLibraryItems.find(
+      (item) => item.itemRateId === selectedOption.value
+    );
+    if (!newItemData) throw new Error("Could not find replacement item data.");
+
+    // Create a new element with the replacement data
+    const newItemElement = document.createElement("div");
+    configureItineraryItem(newItemElement, {
+      price: newItemData.cost,
+      displayText: `${newItemData.supplierName} - ${newItemData.itemName}`,
+      itemId: newItemData.itemId,
+      itemRateId: newItemData.itemRateId,
+      itemType: newItemData.category,
+      currencyCode: newItemData.currencyCode,
+      pricingModel: newItemData.pricingModel,
+      maxOccupancy: newItemData.maxOccupancy,
+    });
+
+    // Replace the old item with the new one in the DOM
+    oldItemElement.parentNode.replaceChild(newItemElement, oldItemElement);
+
+    // THIS IS THE ONLY FIX NEEDED
+    updateAllItemFinancialDisplays(); // Re-run all display logic to clear warnings
+
+    updateGrandTotal();
+    await saveItinerary(false); // Silently save in the background
+  } catch (error) {
+    console.error("Error replacing item:", error);
+    alert(`Could not replace item: ${error.message}`);
+  } finally {
+    hideLoadingSpinner();
   }
 };
 

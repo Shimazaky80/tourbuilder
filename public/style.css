@@ -1526,3 +1526,26 @@ select {
 .itinerary-item.warning-focus {
   box-shadow: 0 0 12px 2px var(--accent-orange);
 }
+
+/* --- In-Place Item Replacement Styles --- */
+.item-replacement-container {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-medium);
+}
+.item-replacement-container label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-light-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+.item-replacement-select {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background-color: var(--bg-dark);
+  color: var(--text-light-primary);
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--border-radius-md);
+  font-size: 0.9rem;
+}
