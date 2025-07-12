@@ -1023,10 +1023,16 @@ const updateSubsequentDayDates = (cDE) => {
 function updateItemFinancialsDisplay(itemElement) {
   if (!itemElement) return;
 
+  // --- Start by removing any pre-existing warning ---
+  itemElement.querySelector(".item-warning")?.remove();
+  itemElement.classList.remove("warning");
+
   const currencyCode =
     itemElement.dataset.currencyCode || currentItineraryCurrency;
   const pricingModel = itemElement.dataset.pricingModel || "per_person";
-  const maxOccupancy = parseInt(itemElement.dataset.maxOccupancy) || 0;
+  const maxOccupancy = itemElement.dataset.maxOccupancy
+    ? parseInt(itemElement.dataset.maxOccupancy)
+    : null;
 
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
@@ -1058,17 +1064,19 @@ function updateItemFinancialsDisplay(itemElement) {
     totalSell = sellingPricePerBase * totalPax;
   }
 
-  const warningDiv = itemElement.querySelector(".item-warning");
-  warningDiv.innerHTML = "";
-  itemElement.classList.remove("warning");
-
   const itemCategory = itemElement.dataset.itemType;
   if (
-    pricingModel === "per_unit" &&
-    ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory)
+    ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
+    maxOccupancy
   ) {
-    if (maxOccupancy > 0 && totalPax > maxOccupancy) {
+    if (totalPax > maxOccupancy) {
+      // THIS IS THE FIX: Create and inject the warning div ONLY when needed.
+      const warningDiv = document.createElement("div");
+      warningDiv.className = "item-warning";
       warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
+      itemElement
+        .querySelector(".item-details")
+        .insertBefore(warningDiv, itemElement.querySelector(".item-pricing"));
       itemElement.classList.add("warning");
     }
   }
@@ -1087,11 +1095,24 @@ function updateItemFinancialsDisplay(itemElement) {
     )} ${displayUnitText}`;
 
   const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
-  if (sellingDisplaySpan)
+  if (sellingDisplaySpan) {
     sellingDisplaySpan.textContent = formatCurrency(
       perPersonSellEquivalent,
       currencyCode
     );
+    const sellPriceContainer = sellingDisplaySpan.closest(
+      ".item-selling-display"
+    );
+    if (sellPriceContainer) {
+      let ppSpan = sellPriceContainer.querySelector(".sell-suffix");
+      if (!ppSpan) {
+        ppSpan = document.createElement("span");
+        ppSpan.className = "sell-suffix";
+        sellPriceContainer.appendChild(ppSpan);
+      }
+      ppSpan.textContent = " pp";
+    }
+  }
 
   if (totalItemCostSpan)
     totalItemCostSpan.textContent = `Total Cost: ${formatCurrency(
@@ -1118,20 +1139,23 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.draggable = true;
 
   const costPrice = parseFloat(
-    sourceData.price || sourceData.cost_per_person || "0"
+    sourceData.price || sourceData.cost || sourceData.cost_per_person || "0"
   );
+  const displayText =
+    (sourceData.displayText || sourceData.item_text) ?? "(Untitled Item)";
+
   itemElement.dataset.costPrice = costPrice.toFixed(2);
+  itemElement.dataset.displayText = displayText;
   itemElement.dataset.currencyCode =
     sourceData.currencyCode || currentItineraryCurrency;
   itemElement.dataset.libraryItemId =
     sourceData.itemId || sourceData.library_item_id || "";
   itemElement.dataset.itemRateId =
     sourceData.itemRateId || sourceData.item_rate_id || "";
-  itemElement.dataset.instanceId =
-    sourceData.instanceId ||
-    `inst-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  itemElement.dataset.instanceId = `inst-${Date.now()}-${Math.random()
+    .toString(36)
+    .substr(2, 5)}`;
   itemElement.dataset.itemType = sourceData.itemType || "other";
-  // THIS IS THE FIX: Ensure these are always set
   itemElement.dataset.pricingModel = sourceData.pricingModel || "per_person";
   itemElement.dataset.maxOccupancy = sourceData.maxOccupancy || "0";
 
@@ -1145,15 +1169,14 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   } else {
     itemElement.dataset.sellingPriceOverridden = "true";
   }
-
   itemElement.dataset.sellingPrice = initialSellingPrice.toFixed(2);
-  const itemTextContent =
-    (sourceData.item_text || sourceData.displayText) ?? "(Untitled Item)";
-  itemElement.innerHTML = ` <div class="item-details"> <span class="item-text">${itemTextContent.replace(
+
+  // THIS IS THE FIX: The delete button is now part of the innerHTML string.
+  itemElement.innerHTML = ` <div class="item-details"> <span class="item-text">${displayText.replace(
     /</g,
     "<"
-  )}</span><div class="item-warning"></div> <div class="item-pricing"> <span class="item-cost-display">Cost: $0.00 pp</span> <span class="item-selling-display"> Sell: <span class="editable-selling-price" title="Double-click to edit selling price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> pp </span> </div> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> </div>`;
-  itemElement.appendChild(createDeleteButton());
+  )}</span> <div class="item-pricing"> <span class="item-cost-display">Cost: $0.00 pp</span> <span class="item-selling-display"> Sell: <span class="editable-selling-price" title="Double-click to edit selling price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> pp </span> </div> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
+
   itemElement.addEventListener("dragstart", handleDragStart);
   itemElement.addEventListener("dragend", handleDragEnd);
   itemElement.classList.remove("is-editing");
@@ -1699,11 +1722,11 @@ const handleItemReplacement = async (event) => {
     // Replace the old item with the new one in the DOM
     oldItemElement.parentNode.replaceChild(newItemElement, oldItemElement);
 
-    // THIS IS THE ONLY FIX NEEDED
-    updateAllItemFinancialDisplays(); // Re-run all display logic to clear warnings
+    // THIS IS THE FIX: Re-run all display logic on the entire page
+    updateAllItemFinancialDisplays();
 
     updateGrandTotal();
-    await saveItinerary(false); // Silently save in the background
+    await saveItinerary(false);
   } catch (error) {
     console.error("Error replacing item:", error);
     alert(`Could not replace item: ${error.message}`);
