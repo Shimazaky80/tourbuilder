@@ -432,6 +432,40 @@ app.post("/api/itineraries", authMiddleware, async (req, res) => {
   }
 });
 
+app.put(
+  "/api/itinerary-item/:dayItemId/description",
+  authMiddleware,
+  async (req, res) => {
+    const { dayItemId } = req.params;
+    const { customDescription } = req.body;
+
+    if (customDescription === undefined) {
+      return res.status(400).json({ error: "customDescription is required." });
+    }
+
+    try {
+      // THIS IS THE FIX: Use req.supabase and the correct column name 'custom_item_description'
+      const { data, error } = await req.supabase
+        .from("itinerary_day_items")
+        .update({ custom_item_description: customDescription })
+        .eq("id", dayItemId)
+        .select()
+        .single();
+
+      if (error) {
+        // More detailed error logging for debugging
+        console.error("Supabase update error:", error);
+        throw error;
+      }
+
+      res.status(200).json(data);
+    } catch (error) {
+      console.error("Error updating item description:", error.message);
+      res.status(500).json({ error: "Failed to update item description." });
+    }
+  }
+);
+
 app.put("/api/itineraries/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;
   const { itineraryData, daysData } = req.body;

@@ -438,6 +438,34 @@
       </div>
     </div>
 
+    <div
+      class="modal-overlay"
+      id="description-editor-modal"
+      style="display: none"
+    >
+      <div class="modal-content">
+        <button class="close-modal-btn" aria-label="Close">×</button>
+        <h2 id="description-modal-title">Edit Description</h2>
+        <form id="description-editor-form">
+          <div class="form-group">
+            <label for="item-description-textarea">Custom Description</label>
+            <textarea
+              id="item-description-textarea"
+              rows="10"
+              placeholder="Enter custom description, notes, or inclusions for this item..."
+            ></textarea>
+          </div>
+          <input type="hidden" id="editing-day-item-id" />
+          <div class="form-actions">
+            <button type="button" class="cancel-modal-btn">Cancel</button>
+            <button type="submit" class="save-description-btn">
+              Save Description
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>

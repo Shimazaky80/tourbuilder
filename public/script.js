@@ -124,6 +124,19 @@ const grandTotalProfitLossValue = document.getElementById(
 const sidebarCurrencySelect = document.getElementById(
   "sidebar-currency-select"
 );
+const descriptionEditorModal = document.getElementById(
+  "description-editor-modal"
+);
+const descriptionModalTitle = document.getElementById(
+  "description-modal-title"
+);
+const descriptionEditorForm = document.getElementById(
+  "description-editor-form"
+);
+const descriptionTextarea = document.getElementById(
+  "item-description-textarea"
+);
+const editingDayItemIdInput = document.getElementById("editing-day-item-id");
 
 // --- State Variables ---
 let currentUser = null;
@@ -932,6 +945,9 @@ const loadItinerary = async (itineraryDbId) => {
           selling_price_per_person_override:
             itm.selling_price_per_person_override,
           displayText: itm.item_text,
+          // ADD THIS LINE
+          db_id: itm.id,
+          item_rate_id: itm.item_rate_id,
           item_rate_id: itm.item_rate_id,
           library_item_id: itm.library_item_id,
           currencyCode: rateMeta?.currency_code, // Use optional chaining
@@ -1023,8 +1039,8 @@ const updateSubsequentDayDates = (cDE) => {
 function updateItemFinancialsDisplay(itemElement) {
   if (!itemElement) return;
 
-  const warningDiv = itemElement.querySelector(".item-warning");
-  warningDiv.innerHTML = "";
+  // Start by removing any pre-existing warning from a previous render
+  itemElement.querySelector(".item-warning")?.remove();
   itemElement.classList.remove("warning");
 
   const currencyCode =
@@ -1037,7 +1053,6 @@ function updateItemFinancialsDisplay(itemElement) {
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-  // THIS IS THE NEW MARKUP LOGIC
   const itemMarkupInput = itemElement.querySelector(".item-markup-input");
   const itemMarkup = itemElement.dataset.itemMarkup;
 
@@ -1047,12 +1062,11 @@ function updateItemFinancialsDisplay(itemElement) {
     itemMarkupInput.value = effectiveMarkup.toFixed(2);
   } else {
     effectiveMarkup = parseFloat(currentMarkupPercentage);
-    itemMarkupInput.value = ""; // Leave blank to signify using default
+    itemMarkupInput.value = "";
     itemMarkupInput.placeholder = effectiveMarkup.toFixed(2);
   }
 
   let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
-  // Recalculate selling price only if it wasn't manually overridden
   if (itemElement.dataset.sellingPriceOverridden !== "true") {
     sellingPricePerBase = costPerBase * (1 + effectiveMarkup / 100);
     itemElement.dataset.sellingPrice = sellingPricePerBase.toFixed(2);
@@ -1073,6 +1087,7 @@ function updateItemFinancialsDisplay(itemElement) {
     totalSell = sellingPricePerBase * totalPax;
   }
 
+  // THIS IS THE FIX: Dynamically create the warning ONLY when needed.
   const itemCategory = itemElement.dataset.itemType;
   if (
     ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
@@ -1090,7 +1105,9 @@ function updateItemFinancialsDisplay(itemElement) {
   }
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
-  const sellingDisplaySpan = itemElement.querySelector(".selling-price-value");
+  const sellingPriceValueSpan = itemElement.querySelector(
+    ".selling-price-value"
+  );
   const totalItemCostSpan = itemElement.querySelector(".total-item-cost");
   const totalItemSellingSpan = itemElement.querySelector(".total-item-selling");
 
@@ -1100,9 +1117,9 @@ function updateItemFinancialsDisplay(itemElement) {
     costPriceSpan.textContent = formatCurrency(costPerBase, currencyCode);
   if (costSuffixSpan) costSuffixSpan.textContent = ` ${displayUnitText}`;
 
-  const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
-  if (sellingDisplaySpan) {
-    sellingDisplaySpan.textContent = formatCurrency(
+  if (sellingPriceValueSpan) {
+    const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
+    sellingPriceValueSpan.textContent = formatCurrency(
       perPersonSellEquivalent,
       currencyCode
     );
@@ -1146,6 +1163,10 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
     sourceData.itemId || sourceData.library_item_id || "";
   itemElement.dataset.itemRateId =
     sourceData.itemRateId || sourceData.item_rate_id || "";
+  itemElement.dataset.dbId = sourceData.db_id || "";
+  itemElement.dataset.instanceId =
+    sourceData.instanceId ||
+    `inst-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
   itemElement.dataset.instanceId = `inst-${Date.now()}-${Math.random()
     .toString(36)
     .substr(2, 5)}`;
@@ -1169,7 +1190,7 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.innerHTML = ` <div class="item-details"> <span class="item-text">${displayText.replace(
     /</g,
     "<"
-  )}</span><div class="item-warning"></div> <div class="item-pricing"> <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span> </div> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
+  )}</span><div class="item-warning"></div> <div class="item-pricing"> <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span> </div><button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
 
   itemElement.addEventListener("dragstart", handleDragStart);
   itemElement.addEventListener("dragend", handleDragEnd);
@@ -1517,6 +1538,16 @@ const handleNumPeopleChange = (event) => {
 const handleDaysContainerClick = (event) => {
   const target = event.target;
 
+  // ADD THIS NEW BLOCK AT THE TOP
+  if (target.classList.contains("edit-description-btn")) {
+    const itemElement = target.closest(".itinerary-item");
+    if (itemElement) {
+      openDescriptionEditor(itemElement);
+    }
+    return; // Stop further execution
+  }
+  // END OF NEW BLOCK
+
   if (target.classList.contains("remove-day-btn")) {
     const dayToRemove = event.target.closest(".day");
     if (dayToRemove) {
@@ -1635,6 +1666,63 @@ const handleItemReplacement = async (event) => {
   } catch (error) {
     console.error("Error replacing item:", error);
     alert(`Could not replace item: ${error.message}`);
+  } finally {
+    hideLoadingSpinner();
+  }
+};
+
+const openDescriptionEditor = async (itemElement) => {
+  const dayItemDbId = itemElement.dataset.dbId;
+  const displayText = itemElement.dataset.displayText;
+
+  descriptionModalTitle.textContent = `Edit Description for: ${displayText}`;
+  editingDayItemIdInput.value = dayItemDbId;
+
+  // For now, we'll just use a data attribute on the element itself
+  // We will sync with the database in the next step
+  const currentDescription = itemElement.dataset.customDescription || "";
+  descriptionTextarea.value = currentDescription;
+
+  openModal(descriptionEditorModal);
+};
+
+const handleSaveDescription = async (event) => {
+  event.preventDefault();
+  showLoadingSpinner("Saving...");
+  try {
+    const dayItemDbId = editingDayItemIdInput.value;
+    const newDescription = descriptionTextarea.value;
+
+    if (!dayItemDbId) {
+      // This handles items that haven't been saved to the DB yet
+      const itemElement = document.querySelector(
+        `[data-instance-id="${editingDayItemIdInput.value}"]`
+      );
+      if (itemElement) {
+        itemElement.dataset.customDescription = newDescription;
+        console.log(
+          "Custom description for new item updated locally. Will be saved with itinerary."
+        );
+      }
+    } else {
+      // This handles existing items by calling the new API endpoint
+      await fetchWithAuth(`/api/itinerary-item/${dayItemDbId}/description`, {
+        method: "PUT",
+        body: { customDescription: newDescription },
+      });
+      // Also update the local dataset to keep things in sync
+      const itemElement = document.querySelector(
+        `[data-db-id="${dayItemDbId}"]`
+      );
+      if (itemElement) {
+        itemElement.dataset.customDescription = newDescription;
+      }
+    }
+
+    closeModal(descriptionEditorModal);
+  } catch (error) {
+    console.error("Error saving description:", error);
+    alert(`Failed to save description: ${error.message}`);
   } finally {
     hideLoadingSpinner();
   }
@@ -2400,6 +2488,15 @@ const attachBuilderListeners = () => {
   sidebarCurrencySelect.addEventListener("change", () =>
     fetchAndDisplayAvailableItems(itemSearchInput.value)
   );
+  // ADD THESE NEW LISTENERS
+  descriptionEditorModal
+    .querySelector(".close-modal-btn")
+    .addEventListener("click", () => closeModal(descriptionEditorModal));
+  descriptionEditorModal
+    .querySelector(".cancel-modal-btn")
+    .addEventListener("click", () => closeModal(descriptionEditorModal));
+  descriptionEditorForm.addEventListener("submit", handleSaveDescription);
+
   builderListenersAttached = true;
   console.log("Builder listeners attached.");
 };

@@ -1545,3 +1545,29 @@ select {
   border-radius: var(--border-radius-md);
   font-size: 0.9rem;
 }
+
+/* --- Edit Description Icon Styles --- */
+.edit-description-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-light-secondary);
+  padding: 4px 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  margin-top: 8px;
+  display: block;
+  text-align: left;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+.edit-description-btn:hover {
+  color: var(--accent-blue);
+}
+
+.item-details .item-text {
+  font-weight: 600;
+  display: block;
+}
