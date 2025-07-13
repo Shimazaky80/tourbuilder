@@ -1358,8 +1358,6 @@ select {
 }
 
 .item-selling-display {
-  cursor: pointer;
-  /* Indicate the whole "Sell: PRICE_PP" area is interactive */
   display: inline-block;
   /* Or block if you want it on its own line */
   padding: 2px 4px;
@@ -1368,17 +1366,41 @@ select {
   transition: background-color 0.2s ease;
 }
 
-.item-selling-display:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  /* Subtle hover for the whole sell part */
+.item-markup-container {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 10px;
+  color: var(--text-light-secondary);
 }
 
-.editable-selling-price {
-  /* This span itself doesn't need much styling if parent handles hover */
-  /* text-decoration: underline dashed; */
-  /* Optional: if you want underline always */
-  /* text-decoration-thickness: 1px; */
-  /* text-underline-offset: 2px; */
+.item-markup-input {
+  width: 55px;
+  padding: 1px 4px;
+  border: 1px solid var(--border-medium);
+  background-color: var(--bg-dark);
+  color: var(--text-light-primary);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.8em;
+  text-align: right;
+  margin-right: 2px;
+  color-scheme: dark;
+}
+
+.item-markup-input:focus {
+  border-color: var(--accent-blue);
+  outline: none;
+}
+
+.item-cost-display {
+  cursor: pointer;
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s ease;
+}
+
+.item-cost-display:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .edit-icon {
@@ -1390,32 +1412,6 @@ select {
   opacity: 0.6;
   /* Make it less prominent initially */
   transition: opacity 0.2s ease;
-}
-
-.item-selling-display:hover .edit-icon {
-  opacity: 1;
-  /* Make icon fully visible on hover of the selling price area */
-  color: var(--accent-blue);
-  /* Change color on hover */
-}
-
-/* Input field for editing selling price (already provided, ensure it's styled) */
-.editing-selling-price-input {
-  font-size: inherit;
-  font-family: inherit;
-  padding: 1px 3px;
-  margin: 0;
-  /* Reset margin if it's replacing a span */
-  border: 1px solid var(--accent-blue);
-  background-color: var(--bg-dark);
-  color: var(--text-light-primary);
-  border-radius: var(--border-radius-sm);
-  width: 80px;
-  /* Adjust as needed */
-  text-align: right;
-  box-sizing: border-box;
-  outline: none;
-  color-scheme: dark;
 }
 
 /* Keep these to hide the price display if price is 0 or attribute is missing */

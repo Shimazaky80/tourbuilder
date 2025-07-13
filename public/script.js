@@ -1023,8 +1023,8 @@ const updateSubsequentDayDates = (cDE) => {
 function updateItemFinancialsDisplay(itemElement) {
   if (!itemElement) return;
 
-  // --- Start by removing any pre-existing warning ---
-  itemElement.querySelector(".item-warning")?.remove();
+  const warningDiv = itemElement.querySelector(".item-warning");
+  warningDiv.innerHTML = "";
   itemElement.classList.remove("warning");
 
   const currencyCode =
@@ -1037,21 +1037,30 @@ function updateItemFinancialsDisplay(itemElement) {
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
+  // THIS IS THE NEW MARKUP LOGIC
+  const itemMarkupInput = itemElement.querySelector(".item-markup-input");
+  const itemMarkup = itemElement.dataset.itemMarkup;
+
+  let effectiveMarkup;
+  if (itemMarkup !== "" && itemMarkup !== undefined) {
+    effectiveMarkup = parseFloat(itemMarkup);
+    itemMarkupInput.value = effectiveMarkup.toFixed(2);
+  } else {
+    effectiveMarkup = parseFloat(currentMarkupPercentage);
+    itemMarkupInput.value = ""; // Leave blank to signify using default
+    itemMarkupInput.placeholder = effectiveMarkup.toFixed(2);
+  }
+
+  let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
+  // Recalculate selling price only if it wasn't manually overridden
+  if (itemElement.dataset.sellingPriceOverridden !== "true") {
+    sellingPricePerBase = costPerBase * (1 + effectiveMarkup / 100);
+    itemElement.dataset.sellingPrice = sellingPricePerBase.toFixed(2);
+  }
+
   let totalCost = 0;
   let totalSell = 0;
   let displayUnitText = "pp";
-
-  let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
-  if (
-    sellingPricePerBase === 0 &&
-    costPerBase > 0 &&
-    itemElement.dataset.sellingPrice !== "0.00" &&
-    itemElement.dataset.sellingPriceOverridden !== "true"
-  ) {
-    const itineraryMarkup = parseFloat(currentMarkupPercentage) || 0;
-    sellingPricePerBase = costPerBase * (1 + itineraryMarkup / 100);
-    itemElement.dataset.sellingPrice = sellingPricePerBase.toFixed(2);
-  }
 
   if (pricingModel === "per_unit") {
     displayUnitText = "per unit";
@@ -1070,7 +1079,6 @@ function updateItemFinancialsDisplay(itemElement) {
     maxOccupancy
   ) {
     if (totalPax > maxOccupancy) {
-      // THIS IS THE FIX: Create and inject the warning div ONLY when needed.
       const warningDiv = document.createElement("div");
       warningDiv.className = "item-warning";
       warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
@@ -1082,17 +1090,15 @@ function updateItemFinancialsDisplay(itemElement) {
   }
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
-  const sellingDisplaySpan = itemElement.querySelector(
-    ".editable-selling-price"
-  );
+  const sellingDisplaySpan = itemElement.querySelector(".selling-price-value");
   const totalItemCostSpan = itemElement.querySelector(".total-item-cost");
   const totalItemSellingSpan = itemElement.querySelector(".total-item-selling");
 
-  if (costDisplaySpan)
-    costDisplaySpan.textContent = `Cost: ${formatCurrency(
-      costPerBase,
-      currencyCode
-    )} ${displayUnitText}`;
+  const costPriceSpan = costDisplaySpan.querySelector(".editable-cost-price");
+  const costSuffixSpan = costDisplaySpan.querySelector(".cost-suffix");
+  if (costPriceSpan)
+    costPriceSpan.textContent = formatCurrency(costPerBase, currencyCode);
+  if (costSuffixSpan) costSuffixSpan.textContent = ` ${displayUnitText}`;
 
   const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
   if (sellingDisplaySpan) {
@@ -1100,18 +1106,6 @@ function updateItemFinancialsDisplay(itemElement) {
       perPersonSellEquivalent,
       currencyCode
     );
-    const sellPriceContainer = sellingDisplaySpan.closest(
-      ".item-selling-display"
-    );
-    if (sellPriceContainer) {
-      let ppSpan = sellPriceContainer.querySelector(".sell-suffix");
-      if (!ppSpan) {
-        ppSpan = document.createElement("span");
-        ppSpan.className = "sell-suffix";
-        sellPriceContainer.appendChild(ppSpan);
-      }
-      ppSpan.textContent = " pp";
-    }
   }
 
   if (totalItemCostSpan)
@@ -1158,6 +1152,7 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.dataset.itemType = sourceData.itemType || "other";
   itemElement.dataset.pricingModel = sourceData.pricingModel || "per_person";
   itemElement.dataset.maxOccupancy = sourceData.maxOccupancy || "0";
+  itemElement.dataset.itemMarkup = sourceData.itemMarkup ?? ""; // Use nullish coalescing
 
   let initialSellingPrice = parseFloat(
     sourceData.selling_price_per_person_override
@@ -1171,11 +1166,10 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   }
   itemElement.dataset.sellingPrice = initialSellingPrice.toFixed(2);
 
-  // THIS IS THE FIX: The delete button is now part of the innerHTML string.
   itemElement.innerHTML = ` <div class="item-details"> <span class="item-text">${displayText.replace(
     /</g,
     "<"
-  )}</span> <div class="item-pricing"> <span class="item-cost-display">Cost: $0.00 pp</span> <span class="item-selling-display"> Sell: <span class="editable-selling-price" title="Double-click to edit selling price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> pp </span> </div> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
+  )}</span><div class="item-warning"></div> <div class="item-pricing"> <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span> </div> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
 
   itemElement.addEventListener("dragstart", handleDragStart);
   itemElement.addEventListener("dragend", handleDragEnd);
@@ -1458,10 +1452,21 @@ const handleAddDayClick = () => {
     console.error("Error in handleAddDayClick:", error);
   }
 };
-const handleDateInputChange = (event) => {
-  if (event.target.classList.contains("day-date-input")) {
-    const dayElement = event.target.closest(".day");
+const handleDaysContainerChange = (event) => {
+  const target = event.target;
+  if (target.classList.contains("day-date-input")) {
+    const dayElement = target.closest(".day");
     updateSubsequentDayDates(dayElement);
+  } else if (target.classList.contains("item-markup-input")) {
+    const itemElement = target.closest(".itinerary-item");
+    if (itemElement) {
+      itemElement.dataset.itemMarkup = target.value;
+      // When markup changes, we must reset the selling price override flag
+      itemElement.dataset.sellingPriceOverridden = "false";
+      updateItemFinancialsDisplay(itemElement);
+      updateGrandTotal();
+      saveItinerary();
+    }
   }
 };
 const handleMainDateChange = (event) => {
@@ -1485,117 +1490,17 @@ const handleMainDateChange = (event) => {
   updateMetadataDisplay();
 };
 
-const enterSellingPriceEditMode = (itemElement, sellingPriceSpan) => {
-  if (
-    !itemElement ||
-    !sellingPriceSpan ||
-    itemElement.classList.contains("is-editing-price") ||
-    itemElement.classList.contains("is-editing")
-  )
-    return;
-  itemElement.classList.add("is-editing-price");
-  itemElement.draggable = false;
-
-  const currentSellingPrice = parseFloat(itemElement.dataset.sellingPrice) || 0;
-  const input = document.createElement("input");
-  input.type = "number";
-  input.className = "editing-selling-price-input";
-  input.value = currentSellingPrice.toFixed(2);
-  input.min = "0";
-  input.step = "0.01";
-  input.ariaLabel = "Edit selling price per person";
-
-  const parentOfSpan = sellingPriceSpan.parentNode;
-  parentOfSpan.replaceChild(input, sellingPriceSpan);
-  input.focus();
-  input.select();
-
-  const exitAndSave = (save) => {
-    let savedChange = false;
-    if (save) {
-      const newSellingPriceRaw = input.value;
-      const newSellingPrice = parseFloat(newSellingPriceRaw);
-      const costPrice = parseFloat(itemElement.dataset.costPrice) || 0;
-
-      if (!isNaN(newSellingPrice) && newSellingPrice >= costPrice) {
-        const oldSellingPrice =
-          parseFloat(itemElement.dataset.sellingPrice) || 0;
-        if (oldSellingPrice.toFixed(2) !== newSellingPrice.toFixed(2)) {
-          itemElement.dataset.sellingPrice = newSellingPrice.toFixed(2);
-          itemElement.dataset.sellingPriceOverridden = "true";
-          updateItemFinancialsDisplay(itemElement);
-          updateGrandTotal();
-          savedChange = true;
-        }
-      } else {
-        alert(
-          `Selling price must be a number and cannot be less than cost price (${formatCurrency(
-            costPrice
-          )}). Reverting.`
-        );
-        itemElement.dataset.sellingPriceOverridden =
-          itemElement.dataset.sellingPriceOverridden === "true"
-            ? "true"
-            : "false";
-      }
-    }
-
-    if (input.parentNode) {
-      input.parentNode.replaceChild(sellingPriceSpan, input);
-    }
-    itemElement.classList.remove("is-editing-price");
-    itemElement.draggable = true;
-    updateItemFinancialsDisplay(itemElement);
-    if (savedChange) saveItinerary();
-  };
-
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      exitAndSave(true);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      exitAndSave(false);
-    }
-  });
-
-  input.addEventListener("blur", () => {
-    setTimeout(() => {
-      if (document.body.contains(input) && document.activeElement !== input)
-        exitAndSave(true);
-    }, 150);
-  });
-};
-
 const handleDoubleClick = (event) => {
   const targetElement = event.target;
   const itemElement = targetElement.closest(".itinerary-item");
-  if (!itemElement) return;
-  if (
-    itemElement.classList.contains("is-editing") ||
-    itemElement.classList.contains("is-editing-price")
-  )
-    return;
-  if (targetElement.classList.contains("editable-selling-price")) {
-    enterSellingPriceEditMode(itemElement, targetElement);
-  } else if (
-    targetElement
-      .closest(".item-selling-display")
-      ?.querySelector(".editable-selling-price") &&
-    !targetElement.closest(".item-cost-display")
-  ) {
-    const editableSpan = targetElement
-      .closest(".item-selling-display")
-      .querySelector(".editable-selling-price");
-    if (editableSpan) enterSellingPriceEditMode(itemElement, editableSpan);
-  } else if (
-    targetElement.closest(".item-text") === targetElement ||
-    (targetElement.classList.contains("item-details") &&
-      !targetElement.closest(".item-pricing"))
-  ) {
-    enterEditMode(itemElement);
+  if (!itemElement || itemElement.classList.contains("is-editing")) return;
+
+  // Only allow editing for the cost price now
+  if (targetElement.classList.contains("editable-cost-price")) {
+    enterPriceEditMode(itemElement, targetElement, "cost");
   }
 };
+
 const handleNumPeopleChange = (event) => {
   const newTotalPax = parseInt(event.target.value);
   if (!isNaN(newTotalPax) && newTotalPax >= 1) {
@@ -1733,6 +1638,95 @@ const handleItemReplacement = async (event) => {
   } finally {
     hideLoadingSpinner();
   }
+};
+
+const enterPriceEditMode = (itemElement, priceSpan, priceType) => {
+  if (
+    !itemElement ||
+    !priceSpan ||
+    itemElement.classList.contains("is-editing-price")
+  )
+    return;
+  itemElement.classList.add("is-editing-price");
+  itemElement.draggable = false;
+
+  const isCost = priceType === "cost";
+  const currentPrice =
+    parseFloat(itemElement.dataset[isCost ? "costPrice" : "sellingPrice"]) || 0;
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.className = "editing-selling-price-input"; // The class works for both
+  input.value = currentPrice.toFixed(2);
+  input.min = "0";
+  input.step = "0.01";
+  input.ariaLabel = `Edit ${priceType} price`;
+
+  const parentOfSpan = priceSpan.parentNode;
+  parentOfSpan.replaceChild(input, priceSpan);
+  input.focus();
+  input.select();
+
+  const exitAndSave = (save) => {
+    let savedChange = false;
+    if (save) {
+      const newPrice = parseFloat(input.value);
+      const costPrice = isCost
+        ? newPrice
+        : parseFloat(itemElement.dataset.costPrice) || 0;
+      const sellingPrice = isCost
+        ? parseFloat(itemElement.dataset.sellingPrice) || 0
+        : newPrice;
+
+      if (!isNaN(newPrice) && (isCost || newPrice >= costPrice)) {
+        const oldPrice = parseFloat(
+          (itemElement.dataset[isCost ? "costPrice" : "sellingPrice"] =
+            newPrice.toFixed(2))
+        );
+        if (isCost) {
+          // THIS IS THE FIX: Recalculate selling price when cost changes
+          const itineraryMarkup = parseFloat(currentMarkupPercentage) || 0;
+          const newSellingPrice = newPrice * (1 + itineraryMarkup / 100);
+          itemElement.dataset.sellingPrice = newSellingPrice.toFixed(2);
+          itemElement.dataset.sellingPriceOverridden = "false"; // Reset override flag
+        } else {
+          itemElement.dataset.sellingPriceOverridden = "true";
+        }
+      } else {
+        alert(
+          isCost
+            ? "Cost must be a valid number."
+            : `Selling price must be a number and cannot be less than cost price (${formatCurrency(
+                costPrice
+              )}).`
+        );
+      }
+    }
+
+    if (input.parentNode) {
+      input.parentNode.replaceChild(priceSpan, input);
+    }
+    itemElement.classList.remove("is-editing-price");
+    itemElement.draggable = true;
+    updateItemFinancialsDisplay(itemElement);
+    if (savedChange) saveItinerary();
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      exitAndSave(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      exitAndSave(false);
+    }
+  });
+  input.addEventListener("blur", () =>
+    setTimeout(() => {
+      if (document.body.contains(input) && document.activeElement !== input)
+        exitAndSave(true);
+    }, 150)
+  );
 };
 
 const handleShowCreateModal = async () => {
@@ -2377,7 +2371,7 @@ const attachBuilderListeners = () => {
   daysContainer.addEventListener("dragenter", handleDragEnter);
   daysContainer.addEventListener("dragleave", handleDragLeave);
   daysContainer.addEventListener("drop", handleDrop);
-  daysContainer.addEventListener("change", handleDateInputChange);
+  daysContainer.addEventListener("change", handleDaysContainerChange);
   daysContainer.addEventListener("dblclick", handleDoubleClick);
   daysContainer.addEventListener("click", handleDaysContainerClick);
   displayStartDateInput.addEventListener("change", handleMainDateChange);
