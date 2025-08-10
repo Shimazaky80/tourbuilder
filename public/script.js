@@ -137,6 +137,22 @@ const descriptionTextarea = document.getElementById(
   "item-description-textarea"
 );
 const editingDayItemIdInput = document.getElementById("editing-day-item-id");
+const serviceConfigModal = document.getElementById("service-config-modal");
+const serviceConfigForm = document.getElementById("service-config-form");
+const serviceConfigTitle = document.getElementById(
+  "service-config-modal-title"
+);
+const serviceStartDayDisplay = document.getElementById(
+  "service-start-day-display"
+);
+const serviceEndDaySelect = document.getElementById("service-end-day-select");
+const serviceDaysContainer = document.getElementById(
+  "service-days-config-container"
+);
+const configuringItemInstanceIdInput = document.getElementById(
+  "configuring-item-instance-id"
+);
+const configuringItemIdInput = document.getElementById("configuring-item-id");
 
 // --- State Variables ---
 let currentUser = null;
@@ -177,6 +193,7 @@ let appDefaultMarkupDirect = 20.0;
 let appDefaultMarkupAgentGeneral = 10.0;
 let currentItineraryStatus = "quotation";
 let activeSession = null;
+let configuringItemData = null;
 
 // --- API Helper Function ---
 async function fetchWithAuth(url, options = {}) {
@@ -714,10 +731,16 @@ const updateMetadataDisplay = () => {
     displayCreationDate.textContent = itineraryCreationDate
       ? formatDisplayDateTime(new Date(itineraryCreationDate))
       : "N/A";
+
+  // WITH THIS NEW BLOCK:
   if (displayStartDateInput) {
-    displayStartDateInput.value = travelStartDate
-      ? formatDate(travelStartDate)
-      : "";
+    const tripStartDateStr = travelStartDate ? formatDate(travelStartDate) : "";
+    const today = formatDate(new Date());
+    displayStartDateInput.value = tripStartDateStr;
+
+    // The min date is either its original start date (if in the past) or today.
+    displayStartDateInput.min =
+      tripStartDateStr && tripStartDateStr < today ? tripStartDateStr : today;
     displayStartDateInput.max = travelEndDate ? formatDate(travelEndDate) : "";
   }
   if (displayEndDateInput) {
@@ -732,6 +755,7 @@ const updateMetadataDisplay = () => {
 };
 
 const saveItinerary = async (showAlert = true) => {
+  // VALIDATION: Manually check for any occupancy warnings on the page before saving.
   const allWarningElements = document.querySelectorAll(".item-warning");
   let firstFoundWarning = null;
 
@@ -783,7 +807,7 @@ const saveItinerary = async (showAlert = true) => {
       markup_percentage: currentMarkupPercentage,
       currency_code: currentItineraryCurrency,
       client_id: currentB2bClientId,
-      status: currentItineraryStatus, // <-- ADD THIS LINE
+      status: currentItineraryStatus,
     };
 
     const daysData = [];
@@ -797,15 +821,22 @@ const saveItinerary = async (showAlert = true) => {
       itemElements.forEach((itemEl, itemIndex) => {
         const isOverridden = itemEl.dataset.sellingPriceOverridden === "true";
         const sellingPrice = parseFloat(itemEl.dataset.sellingPrice) || 0;
+
         items.push({
+          id: itemEl.dataset.dbId || undefined,
+          itinerary_day_id: dayEl.dataset.dbId || undefined,
           item_rate_id: itemEl.dataset.itemRateId || null,
-          item_text: itemEl.querySelector(".item-text")?.textContent || "Item",
+          item_text: itemEl.dataset.displayText,
           item_price_per_person: parseFloat(itemEl.dataset.costPrice) || 0,
           selling_price_per_person_override: isOverridden ? sellingPrice : null,
           item_order: itemIndex + 1,
+          custom_item_description: itemEl.dataset.customDescription || null,
+          library_item_id: itemEl.dataset.libraryItemId || null,
+          service_config_id: itemEl.dataset.serviceConfigId || null,
         });
       });
       daysData.push({
+        id: dayEl.dataset.dbId || undefined,
         day_number: dayNumber,
         day_date: dayDate ? formatDate(dayDate) : null,
         items: items,
@@ -813,10 +844,25 @@ const saveItinerary = async (showAlert = true) => {
     });
 
     const url = `/api/itineraries/${currentItineraryRecordId}`;
-    await fetchWithAuth(url, {
+
+    const responseData = await fetchWithAuth(url, {
       method: "PUT",
       body: { itineraryData, daysData },
     });
+
+    if (responseData && responseData.savedDays) {
+      responseData.savedDays.forEach((savedDay) => {
+        const dayEl = document.querySelector(
+          `.day[data-day-number="${savedDay.day_number}"]`
+        );
+        if (dayEl && !dayEl.dataset.dbId) {
+          dayEl.dataset.dbId = savedDay.id;
+          console.log(
+            `Day ${savedDay.day_number} updated with new DB ID: ${savedDay.id}`
+          );
+        }
+      });
+    }
 
     if (showAlert) console.log("Itinerary saved via backend.");
   } catch (error) {
@@ -891,33 +937,45 @@ const loadItinerary = async (itineraryDbId) => {
       currentUser?.email ||
       "";
 
-    // --- THIS IS THE FINAL, ROBUST LOGIC ---
-    // 1. Get all unique library_item_ids and item_rate_ids
+    // --- Data Fetching Logic ---
     const allItems = idat.itinerary_days.flatMap((d) => d.itinerary_day_items);
     const libraryItemIds = [
       ...new Set(allItems.map((i) => i.library_item_id).filter(Boolean)),
     ];
-    const rateIds = [
-      ...new Set(allItems.map((i) => i.item_rate_id).filter(Boolean)),
-    ];
+    const dayItemIds = allItems.map((i) => i.id);
 
-    // 2. Make safe API calls to our own server to get all required metadata
-    let itemMetaMap = {};
-    let rateMetaMap = {};
+    const allRateIds = [...new Set(allItems.map((i) => i.item_rate_id))];
+    // We need to fetch configs first to find out if there are *other* rate IDs we need
+    const serviceConfigMap =
+      dayItemIds.length > 0
+        ? await fetchWithAuth("/api/service-configs/bulk", {
+            method: "POST",
+            body: { dayItemIds },
+          })
+        : {};
 
-    if (libraryItemIds.length > 0) {
-      itemMetaMap = await fetchWithAuth("/api/items/metadata", {
-        method: "POST",
-        body: { itemIds: libraryItemIds },
+    Object.values(serviceConfigMap)
+      .flat()
+      .forEach((config) => {
+        if (!allRateIds.includes(config.item_rate_id)) {
+          allRateIds.push(config.item_rate_id);
+        }
       });
-    }
-    if (rateIds.length > 0) {
-      rateMetaMap = await fetchWithAuth("/api/rates/currencies", {
-        method: "POST",
-        body: { rateIds: rateIds },
-      });
-    }
-    // --- END OF FINAL LOGIC ---
+
+    const [itemMetaMap, rateMetaMap] = await Promise.all([
+      libraryItemIds.length > 0
+        ? fetchWithAuth("/api/items/metadata", {
+            method: "POST",
+            body: { itemIds: libraryItemIds },
+          })
+        : Promise.resolve({}),
+      allRateIds.length > 0
+        ? fetchWithAuth("/api/rates/metadata", {
+            method: "POST",
+            body: { rateIds: allRateIds.filter(Boolean) },
+          })
+        : Promise.resolve({}),
+    ]);
 
     // --- Rebuild the UI ---
     daysContainer.innerHTML = "";
@@ -931,31 +989,56 @@ const loadItinerary = async (itineraryDbId) => {
         d.day_number,
         d.day_date ? formatDate(parseDateString(d.day_date)) : null
       );
+      newDayElement.dataset.dbId = d.id;
+
       const dayItemsList = newDayElement.querySelector(".day-items-list");
       const itdat = (d.itinerary_day_items || []).sort(
         (a, b) => a.item_order - b.item_order
       );
       itdat.forEach((itm) => {
         const itemElement = document.createElement("div");
-        const rateMeta = rateMetaMap[itm.item_rate_id] || {};
         const itemMeta = itemMetaMap[itm.library_item_id] || {};
+        let rateMeta = rateMetaMap[itm.item_rate_id] || {};
+        const serviceConfigs = serviceConfigMap[itm.id] || [];
+
+        let finalCost = 0;
+        if (serviceConfigs.length > 0) {
+          serviceConfigs.forEach((config) => {
+            const configRateMeta = rateMetaMap[config.item_rate_id];
+            if (configRateMeta) {
+              finalCost +=
+                configRateMeta.cost_per_unit ||
+                configRateMeta.cost_per_person ||
+                0;
+            }
+          });
+          rateMeta = rateMetaMap[serviceConfigs[0].item_rate_id] || {};
+        } else {
+          finalCost =
+            itm.item_price_per_person ||
+            rateMeta?.cost_per_unit ||
+            rateMeta?.cost_per_person ||
+            0;
+        }
 
         configureItineraryItem(itemElement, {
-          cost_per_person: itm.item_price_per_person,
+          cost: finalCost,
           selling_price_per_person_override:
             itm.selling_price_per_person_override,
           displayText: itm.item_text,
-          // ADD THIS LINE
           db_id: itm.id,
           item_rate_id: itm.item_rate_id,
-          item_rate_id: itm.item_rate_id,
           library_item_id: itm.library_item_id,
-          currencyCode: rateMeta?.currency_code, // Use optional chaining
-          pricingModel: rateMeta?.pricing_model, // Use optional chaining
+          currencyCode: rateMeta?.currency_code,
+          pricingModel: rateMeta?.pricing_model,
           maxOccupancy: itemMeta.max_occupancy,
+          subCategory: itemMeta.sub_category,
+          serviceConfigs: serviceConfigs,
         });
+
         dayItemsList.appendChild(itemElement);
       });
+
       daysContainer.appendChild(newDayElement);
     });
 
@@ -963,6 +1046,7 @@ const loadItinerary = async (itineraryDbId) => {
     await fetchAndDisplayAvailableItems(itemSearchInput.value.trim());
     updateGrandTotal();
     updateMetadataDisplay();
+    updateServiceDayHighlights();
     showPage(mainAppWrapper);
     if (!builderListenersAttached) attachBuilderListeners();
 
@@ -1039,9 +1123,8 @@ const updateSubsequentDayDates = (cDE) => {
 function updateItemFinancialsDisplay(itemElement) {
   if (!itemElement) return;
 
-  // Start by removing any pre-existing warning from a previous render
   itemElement.querySelector(".item-warning")?.remove();
-  itemElement.classList.remove("warning");
+  itemElement.classList.remove("warning", "is-service-item");
 
   const currencyCode =
     itemElement.dataset.currencyCode || currentItineraryCurrency;
@@ -1049,6 +1132,8 @@ function updateItemFinancialsDisplay(itemElement) {
   const maxOccupancy = itemElement.dataset.maxOccupancy
     ? parseInt(itemElement.dataset.maxOccupancy)
     : null;
+  const subCategory = itemElement.dataset.subCategory;
+  const serviceConfigs = JSON.parse(itemElement.dataset.serviceConfigs || "[]");
 
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
   const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
@@ -1081,13 +1166,11 @@ function updateItemFinancialsDisplay(itemElement) {
     totalCost = costPerBase;
     totalSell = sellingPricePerBase;
   } else {
-    // per_person
     displayUnitText = "pp";
     totalCost = costPerBase * totalPax;
     totalSell = sellingPricePerBase * totalPax;
   }
 
-  // THIS IS THE FIX: Dynamically create the warning ONLY when needed.
   const itemCategory = itemElement.dataset.itemType;
   if (
     ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
@@ -1103,6 +1186,16 @@ function updateItemFinancialsDisplay(itemElement) {
       itemElement.classList.add("warning");
     }
   }
+
+  // --- THIS IS THE DEFINITIVE FIX ---
+  const configBtn = itemElement.querySelector(".configure-service-btn");
+  if (subCategory === "Guide" || subCategory === "Driver") {
+    itemElement.classList.add("is-service-item");
+    if (configBtn) configBtn.style.display = "inline-block";
+  } else {
+    if (configBtn) configBtn.style.display = "none";
+  }
+  // --- END OF FIX ---
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
   const sellingPriceValueSpan = itemElement.querySelector(
@@ -1145,12 +1238,15 @@ const updateAllItemFinancialDisplays = () => {
 
 const configureItineraryItem = (itemElement, sourceData = {}) => {
   if (!itemElement) return;
+
+  const serviceConfigs = sourceData.serviceConfigs || [];
+
   itemElement.classList.remove("draggable-item");
   itemElement.classList.add("itinerary-item");
   itemElement.draggable = true;
 
   const costPrice = parseFloat(
-    sourceData.price || sourceData.cost || sourceData.cost_per_person || "0"
+    sourceData.cost || sourceData.price || sourceData.cost_per_person || "0"
   );
   const displayText =
     (sourceData.displayText || sourceData.item_text) ?? "(Untitled Item)";
@@ -1164,16 +1260,15 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.dataset.itemRateId =
     sourceData.itemRateId || sourceData.item_rate_id || "";
   itemElement.dataset.dbId = sourceData.db_id || "";
-  itemElement.dataset.instanceId =
-    sourceData.instanceId ||
-    `inst-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
   itemElement.dataset.instanceId = `inst-${Date.now()}-${Math.random()
     .toString(36)
     .substr(2, 5)}`;
   itemElement.dataset.itemType = sourceData.itemType || "other";
+  itemElement.dataset.subCategory = sourceData.subCategory || "";
   itemElement.dataset.pricingModel = sourceData.pricingModel || "per_person";
   itemElement.dataset.maxOccupancy = sourceData.maxOccupancy || "0";
-  itemElement.dataset.itemMarkup = sourceData.itemMarkup ?? ""; // Use nullish coalescing
+  itemElement.dataset.itemMarkup = sourceData.itemMarkup ?? "";
+  itemElement.dataset.serviceConfigs = JSON.stringify(serviceConfigs);
 
   let initialSellingPrice = parseFloat(
     sourceData.selling_price_per_person_override
@@ -1187,10 +1282,24 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   }
   itemElement.dataset.sellingPrice = initialSellingPrice.toFixed(2);
 
-  itemElement.innerHTML = ` <div class="item-details"> <span class="item-text">${displayText.replace(
-    /</g,
-    "<"
-  )}</span><div class="item-warning"></div> <div class="item-pricing"> <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span> </div><button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button> </div> <div class="item-totals"> <span class="total-item-cost">Total Cost: $0.00</span> <span class="total-item-selling">Total Sell: $0.00</span> <button class="delete-item-btn" title="Delete item">✕</button> </div>`;
+  itemElement.innerHTML = `
+    <div class="item-details">
+      <span class="item-text">${displayText.replace(/</g, "<")}</span>
+      <div class="item-warning"></div>
+      <div class="item-pricing">
+        <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> 
+        <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> 
+        <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span>
+      </div>
+      <div class="item-actions">
+        <button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button>
+      </div>
+    </div>
+    <div class="item-totals">
+      <span class="total-item-cost">Total Cost: $0.00</span>
+      <span class="total-item-selling">Total Sell: $0.00</span>
+      <button class="delete-item-btn" title="Delete item">✕</button>
+    </div>`;
 
   itemElement.addEventListener("dragstart", handleDragStart);
   itemElement.addEventListener("dragend", handleDragEnd);
@@ -1292,6 +1401,50 @@ const updateGrandTotal = () => {
   }
 };
 
+// --- Adding the New, Athoritative Function to add the Configure Service button ---
+const updateServiceDayHighlights = () => {
+  // First, reset all service items by removing any existing buttons
+  daysContainer
+    .querySelectorAll(".configure-service-btn")
+    .forEach((btn) => btn.remove());
+
+  const serviceItemGroups = {};
+
+  // Find and group all service items by their library ID
+  daysContainer
+    .querySelectorAll(
+      '.itinerary-item[data-sub-category="Guide"], .itinerary-item[data-sub-category="Driver"]'
+    )
+    .forEach((itemEl) => {
+      const libId = itemEl.dataset.libraryItemId;
+      if (!libId) return;
+      if (!serviceItemGroups[libId]) {
+        serviceItemGroups[libId] = [];
+      }
+      const dayNum = parseInt(itemEl.closest(".day").dataset.dayNumber);
+      serviceItemGroups[libId].push({ element: itemEl, day: dayNum });
+    });
+
+  // For each group, find the one on the earliest day and add the button
+  for (const libId in serviceItemGroups) {
+    const group = serviceItemGroups[libId];
+    if (group.length === 0) continue;
+
+    // Sort by day number to ensure we find the absolute first one
+    group.sort((a, b) => a.day - b.day);
+    const firstServiceItem = group[0].element;
+
+    // Add the button only to this first item if it doesn't already have one
+    if (!firstServiceItem.querySelector(".configure-service-btn")) {
+      const configBtn = document.createElement("button");
+      configBtn.className = "configure-service-btn";
+      configBtn.title = "Configure multi-day service options";
+      configBtn.textContent = "⚙️ Configure Service";
+      firstServiceItem.querySelector(".item-actions").appendChild(configBtn);
+    }
+  }
+};
+
 const handleDragStart = (event) => {
   if (
     event.target.closest(".delete-item-btn") ||
@@ -1384,7 +1537,7 @@ const handleDragLeave = (event) => {
     removeDropIndicator();
   }
 };
-const handleDrop = (event) => {
+const handleDrop = async (event) => {
   event.preventDefault();
   removeDropIndicator();
   const dropZone = event.target.closest(".day-items-list");
@@ -1395,13 +1548,23 @@ const handleDrop = (event) => {
     return;
   }
   dropZone.classList.remove("drag-over");
+
   const sourceIsSidebar = currentlyDraggedElement.closest(
     "#available-items-panel"
   );
   let elementToAdd;
+
+  // THIS IS THE DEFINITIVE FIX
+  const targetDayElement = dropZone.closest(".day");
+  if (!targetDayElement.dataset.dbId) {
+    console.log("Target day is new. Saving itinerary first...");
+    showLoadingSpinner("Saving Day...");
+    await saveItinerary(false); // This now updates the day element's dbId
+    hideLoadingSpinner();
+  }
+
   if (sourceIsSidebar) {
-    elementToAdd = document.createElement("div");
-    configureItineraryItem(elementToAdd, {
+    const itemData = {
       price: currentlyDraggedElement.dataset.price,
       displayText: currentlyDraggedElement.dataset.displayText,
       itemId: currentlyDraggedElement.dataset.itemId,
@@ -1410,10 +1573,21 @@ const handleDrop = (event) => {
       currencyCode: sidebarCurrencySelect.value,
       pricingModel: currentlyDraggedElement.dataset.pricingModel,
       maxOccupancy: currentlyDraggedElement.dataset.maxOccupancy,
-    });
+      subCategory: currentlyDraggedElement.dataset.subCategory,
+    };
+
+    if (itemData.subCategory === "Guide" || itemData.subCategory === "Driver") {
+      openServiceConfigModal(itemData, targetDayElement);
+      currentlyDraggedElement = null;
+      return;
+    } else {
+      elementToAdd = document.createElement("div");
+      configureItineraryItem(elementToAdd, itemData);
+    }
   } else {
     elementToAdd = currentlyDraggedElement;
   }
+
   let droppedOnItem = event.target.closest(".itinerary-item:not(.dragging)");
   if (droppedOnItem && droppedOnItem.parentNode === dropZone) {
     const rect = droppedOnItem.getBoundingClientRect();
@@ -1425,10 +1599,13 @@ const handleDrop = (event) => {
   } else {
     dropZone.appendChild(elementToAdd);
   }
+
   updateGrandTotal();
+  updateServiceDayHighlights();
   saveItinerary();
   currentlyDraggedElement = null;
 };
+
 const handleAddDayClick = () => {
   try {
     if (!travelStartDate || !travelEndDate) {
@@ -1492,23 +1669,61 @@ const handleDaysContainerChange = (event) => {
 };
 const handleMainDateChange = (event) => {
   if (!displayStartDateInput || !displayEndDateInput) return;
+
+  const oldStartDate = travelStartDate;
+  const oldEndDate = travelEndDate;
+
+  // Calculate duration based on the previous valid state
+  let durationInNights = -1;
+  if (oldStartDate && oldEndDate && oldEndDate >= oldStartDate) {
+    durationInNights = Math.round(
+      (oldEndDate.getTime() - oldStartDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  }
+
   const newStartDate = parseDateString(displayStartDateInput.value);
-  const newEndDate = parseDateString(displayEndDateInput.value);
-  if (newStartDate !== null) travelStartDate = newStartDate;
-  else travelStartDate = null;
-  if (newEndDate !== null) travelEndDate = newEndDate;
-  else travelEndDate = null;
-  if (newStartDate && newEndDate && newEndDate < newStartDate) {
-    alert("End Date cannot be before Start Date.");
-    displayStartDateInput.value = travelStartDate
-      ? formatDate(travelStartDate)
-      : "";
-    displayEndDateInput.value = travelEndDate ? formatDate(travelEndDate) : "";
+
+  if (!newStartDate) {
+    // If the date is cleared or invalid, revert to the previous valid state and stop
+    displayStartDateInput.value = oldStartDate ? formatDate(oldStartDate) : "";
     return;
   }
+
+  // Update the global state for the start date
+  travelStartDate = newStartDate;
+
+  // Calculate the new end date, preserving duration if it was valid
+  if (durationInNights >= 0) {
+    travelEndDate = addDays(newStartDate, durationInNights);
+  } else {
+    // If no valid duration existed, set the end date to the new start date
+    travelEndDate = new Date(newStartDate);
+  }
+
+  // Update the UI from the new global state and save
   resquenceDayDates();
-  saveItinerary();
-  updateMetadataDisplay();
+  updateMetadataDisplay(); // This will correctly set the input values and constraints
+  saveItinerary(false); // Save silently
+};
+
+const resquenceDayDates = () => {
+  if (!travelStartDate) return;
+
+  let currentDate = new Date(travelStartDate);
+  const dayElements = daysContainer.querySelectorAll(".day");
+
+  dayElements.forEach((dayEl) => {
+    const dateInput = dayEl.querySelector(".day-date-input");
+    if (dateInput) {
+      if (!travelEndDate || currentDate <= travelEndDate) {
+        dateInput.value = formatDate(currentDate);
+      } else {
+        dateInput.value = "";
+      }
+    }
+    currentDate = addDays(currentDate, 1);
+  });
+  updateAddDayButtonState();
 };
 
 const handleDoubleClick = (event) => {
@@ -1538,15 +1753,56 @@ const handleNumPeopleChange = (event) => {
 const handleDaysContainerClick = (event) => {
   const target = event.target;
 
-  // ADD THIS NEW BLOCK AT THE TOP
   if (target.classList.contains("edit-description-btn")) {
     const itemElement = target.closest(".itinerary-item");
     if (itemElement) {
       openDescriptionEditor(itemElement);
     }
     return; // Stop further execution
+  } else if (target.classList.contains("configure-service-btn")) {
+    const clickedItemEl = target.closest(".itinerary-item");
+    const startDayEl = clickedItemEl.closest(".day");
+    const libraryItemId = clickedItemEl.dataset.libraryItemId;
+
+    if (!libraryItemId) return;
+
+    // Find all items that are part of this service run
+    const serviceItemsToRemove = [];
+    let currentDay = startDayEl;
+    while (currentDay) {
+      const serviceItemInDay = currentDay.querySelector(
+        `.itinerary-item[data-library-item-id="${libraryItemId}"]`
+      );
+      if (serviceItemInDay) {
+        serviceItemsToRemove.push(serviceItemInDay);
+      } else {
+        // Stop when we hit a day without this service item
+        break;
+      }
+      currentDay = currentDay.nextElementSibling;
+    }
+
+    if (
+      confirm(
+        "This will replace the current service run. Are you sure you want to re-configure it?"
+      )
+    ) {
+      // Remove all the old items from the itinerary
+      serviceItemsToRemove.forEach((item) => item.remove());
+
+      // Prepare data from the *original* item to open the modal fresh
+      const itemData = {
+        displayText: clickedItemEl.dataset.displayText,
+        itemId: clickedItemEl.dataset.libraryItemId,
+        subCategory: clickedItemEl.dataset.subCategory,
+        // Other necessary data could be added here if needed
+      };
+
+      // Open the modal to start the configuration process over
+      openServiceConfigModal(itemData, startDayEl);
+    }
+    return;
   }
-  // END OF NEW BLOCK
 
   if (target.classList.contains("remove-day-btn")) {
     const dayToRemove = event.target.closest(".day");
@@ -1556,6 +1812,7 @@ const handleDaysContainerClick = (event) => {
       if (confirm(`Remove ${dayTitle}?`)) {
         dayToRemove.remove();
         updateGrandTotal();
+        updateServiceDayHighlights();
         saveItinerary();
       }
     }
@@ -1728,6 +1985,204 @@ const handleSaveDescription = async (event) => {
   }
 };
 
+const handleModalDateChange = () => {
+  const startDateValue = travelStartDateInput.value;
+  const endDateValue = travelEndDateInput.value;
+
+  const startDate = parseDateString(startDateValue);
+
+  if (startDate) {
+    // Set the minimum selectable date for the end date picker
+    travelEndDateInput.min = startDateValue;
+
+    const endDate = parseDateString(endDateValue);
+    // If the end date is now before the start date, reset the end date to match
+    if (endDate && endDate < startDate) {
+      travelEndDateInput.value = startDateValue;
+    }
+  }
+};
+
+const calculateServiceCost = (serviceConfigs, ratesMap) => {
+  let totalCost = 0;
+  if (!serviceConfigs || !ratesMap) return 0;
+
+  serviceConfigs.forEach((config) => {
+    const rateData = ratesMap[config.item_rate_id];
+    if (rateData) {
+      // This assumes the cost is always in cost_per_unit for services
+      totalCost += parseFloat(
+        rateData.cost_per_unit || rateData.cost_per_person || 0
+      );
+    }
+  });
+  return totalCost;
+};
+
+const openServiceConfigModal = (itemData, startDayElement) => {
+  configuringItemData = itemData; // Store the raw data from the sidebar item
+  const startDayNum = parseInt(startDayElement.dataset.dayNumber);
+
+  serviceConfigTitle.textContent = `Configure: ${itemData.displayText}`;
+  serviceStartDayDisplay.value = `Day ${startDayNum}`;
+
+  // These will be used when we save the configuration
+  configuringItemIdInput.value = itemData.itemId;
+
+  // Populate the "End Day" dropdown, starting from the current day
+  const allDayElements = Array.from(daysContainer.querySelectorAll(".day"));
+  serviceEndDaySelect.innerHTML = "";
+  allDayElements.forEach((dayEl) => {
+    const dayNum = parseInt(dayEl.dataset.dayNumber);
+    if (dayNum >= startDayNum) {
+      const option = document.createElement("option");
+      option.value = dayNum;
+      option.textContent = `Day ${dayNum}`;
+      // Select the start day by default
+      if (dayNum === startDayNum) {
+        option.selected = true;
+      }
+      serviceEndDaySelect.appendChild(option);
+    }
+  });
+
+  // Initial call to generate the rows based on default selection
+  generateServiceDayRows();
+  openModal(serviceConfigModal);
+};
+
+const generateServiceDayRows = async () => {
+  const startDay = parseInt(serviceStartDayDisplay.value.replace("Day ", ""));
+  const endDay = parseInt(serviceEndDaySelect.value);
+  const itemId = configuringItemIdInput.value;
+
+  showLoadingSpinner("Fetching rates...");
+  try {
+    // THIS IS THE FIX: Call the new, dedicated API endpoint
+    const availableRates = await fetchWithAuth(`/api/items/${itemId}/rates`);
+
+    serviceDaysContainer.innerHTML = "";
+    for (let i = startDay; i <= endDay; i++) {
+      const dayElement = document.querySelector(`.day[data-day-number="${i}"]`);
+      const dayDate = dayElement
+        ? dayElement.querySelector(".day-date-input").value
+        : "";
+
+      const dayRow = document.createElement("div");
+      dayRow.className = "service-day-row";
+      dayRow.dataset.dayNumber = i;
+
+      const rateOptionsHtml = availableRates
+        .filter((rate) => rate.rate_type) // Ensure we only show rates with a type
+        .map((rate) => {
+          // Reconstruct the item data needed for the next step
+          const fullRateData = {
+            itemId: rate.items.id,
+            itemName: rate.items.name,
+            supplierName: rate.items.suppliers.name,
+            category: rate.items.category,
+            subCategory: rate.items.sub_category,
+            maxOccupancy: rate.items.max_occupancy,
+            itemRateId: rate.id,
+            rate_name: rate.rate_name,
+            cost: rate.cost_per_person || rate.cost_per_unit,
+            pricingModel: rate.pricing_model,
+            rate_type: rate.rate_type,
+            currencyCode: rate.currency_code,
+          };
+          return `<option value="${rate.id}" data-rate-data='${JSON.stringify(
+            fullRateData
+          )}'>${rate.rate_name || rate.rate_type}</option>`;
+        })
+        .join("");
+
+      dayRow.innerHTML = `
+        <label>Day ${i} (${dayDate})</label>
+        <div class="conflict-warning-container"></div>
+        <select class="rate-type-select">
+          <option value="">Select rate...</option>
+          ${rateOptionsHtml}
+        </select>
+      `;
+      serviceDaysContainer.appendChild(dayRow);
+    }
+  } catch (error) {
+    console.error("Failed to generate service day rows:", error);
+    serviceDaysContainer.innerHTML = `<p style="color: red; padding: 1rem;">Error fetching rates. Please try again.</p>`;
+  } finally {
+    hideLoadingSpinner();
+  }
+};
+
+const handleConfirmService = async (event) => {
+  event.preventDefault();
+  showLoadingSpinner("Saving Service...");
+
+  try {
+    const startDayNum = parseInt(
+      serviceStartDayDisplay.value.replace("Day ", "")
+    );
+
+    // 1. Collect all day configurations from the modal
+    const dayRows = serviceDaysContainer.querySelectorAll(".service-day-row");
+    const configurations = [];
+    for (const row of dayRows) {
+      const dayNumber = parseInt(row.dataset.dayNumber);
+      const rateSelect = row.querySelector(".rate-type-select");
+      const rateId = rateSelect.value;
+      if (!rateId) {
+        throw new Error(`Please select a rate for Day ${dayNumber}.`);
+      }
+      const rateData = JSON.parse(
+        rateSelect.options[rateSelect.selectedIndex].dataset.rateData
+      );
+      configurations.push({ dayNumber, rateData });
+    }
+
+    // 2. THIS IS THE FIX: Loop through each configuration and add a full, independent item to each day
+    for (const config of configurations) {
+      const targetDayElement = document.querySelector(
+        `.day[data-day-number="${config.dayNumber}"]`
+      );
+      if (targetDayElement) {
+        if (!targetDayElement.dataset.dbId) {
+          await saveItinerary(false); // Save if the target day is new
+        }
+
+        const dropZone = targetDayElement.querySelector(".day-items-list");
+        const serviceElement = document.createElement("div");
+
+        // Use the specific rate data for THIS day to create a complete item
+        configureItineraryItem(serviceElement, {
+          cost: config.rateData.cost,
+          displayText: `${config.rateData.supplierName} - ${config.rateData.itemName} (${config.rateData.rate_name})`,
+          itemId: config.rateData.itemId,
+          itemRateId: config.rateData.itemRateId,
+          itemType: config.rateData.category,
+          subCategory: config.rateData.subCategory,
+          currencyCode: config.rateData.currencyCode,
+          pricingModel: config.rateData.pricingModel,
+          maxOccupancy: config.rateData.maxOccupancy,
+        });
+
+        dropZone.appendChild(serviceElement);
+      }
+    }
+
+    // 3. Update UI and save the entire itinerary at once
+    updateServiceDayHighlights();
+    updateAllItemFinancialDisplays();
+    updateGrandTotal();
+    saveItinerary();
+  } catch (error) {
+    console.error("Error confirming service:", error);
+    alert(`Error: ${error.message}`);
+  } finally {
+    hideLoadingSpinner();
+    closeModal(serviceConfigModal);
+  }
+};
+
 const enterPriceEditMode = (itemElement, priceSpan, priceType) => {
   if (
     !itemElement ||
@@ -1830,6 +2285,13 @@ const handleShowCreateModal = async () => {
   await fetchAndPopulateB2bClients();
   populateCurrencyDropdown();
   handleClientTypeChangeInModal();
+
+  // ADD THIS BLOCK
+  const today = formatDate(new Date());
+  travelStartDateInput.min = today;
+  travelEndDateInput.min = today;
+  // END OF BLOCK
+
   openModal(newItineraryModal);
 };
 
@@ -1872,6 +2334,17 @@ const handleShowEditModal = async () => {
   // Trigger UI updates within the modal
   handleClientTypeChangeInModal(); // This shows/hides the B2B client field
   handlePaxNumChangeModal(); // This updates pax total and generates name fields with pre-filled names
+
+  // ADD THIS BLOCK
+  const today = formatDate(new Date());
+  const tripStartDateStr = travelStartDateInput.value;
+
+  // The min date for an existing trip is either its original start date (if in the past) or today.
+  travelStartDateInput.min =
+    tripStartDateStr && tripStartDateStr < today ? tripStartDateStr : today;
+  // The end date must always be on or after the start date.
+  travelEndDateInput.min = tripStartDateStr || today;
+  // END OF BLOCK
 
   openModal(newItineraryModal);
 };
@@ -2247,7 +2720,6 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
     return;
   }
 
-  // **THE FIX**: Use the sidebar's selected currency, not the itinerary's.
   const selectedCurrencyCode = sidebarCurrencySelect.value;
   if (!selectedCurrencyCode) {
     availableItemsList.innerHTML =
@@ -2283,9 +2755,9 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
               itemName: item.name,
               supplierName: item.suppliers.name,
               category: item.category,
+              subCategory: item.sub_category, // <-- Add this
               maxOccupancy: item.max_occupancy,
               itemRateId: chosenRate.id,
-              // This is the key change: use either cost_per_person or cost_per_unit
               cost: chosenRate.cost_per_person || chosenRate.cost_per_unit,
               pricingModel: chosenRate.pricing_model,
               currencyCode: chosenRate.currency_code,
@@ -2296,7 +2768,6 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
     }
     allAvailableLibraryItems = processedForDisplay;
 
-    // Render the items
     availableItemsList.innerHTML = "";
     if (processedForDisplay.length > 0) {
       processedForDisplay.forEach((itemData) => {
@@ -2304,7 +2775,6 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
         itemDiv.className = "draggable-item";
         itemDiv.draggable = true;
 
-        // Store ALL necessary data on the element's dataset
         const displayText = `${itemData.supplierName} - ${itemData.itemName}`;
         itemDiv.dataset.displayText = displayText;
         itemDiv.dataset.itemId = itemData.itemId;
@@ -2313,8 +2783,9 @@ const fetchAndDisplayAvailableItems = async (searchTerm = "") => {
         itemDiv.dataset.price = (itemData.cost || "0").toString();
         itemDiv.dataset.pricingModel = itemData.pricingModel || "per_person";
         itemDiv.dataset.maxOccupancy = itemData.maxOccupancy || "0";
+        // THIS IS THE CRITICAL ADDITION
+        itemDiv.dataset.subCategory = itemData.subCategory || "";
 
-        // Dynamically create the correct label
         let priceSuffix =
           itemData.pricingModel === "per_unit" ? " per unit" : " pp";
         itemDiv.innerHTML = `${displayText} <span style="color: var(--price-color); font-weight: 500;">(${symbolForThisFetch}${itemData.cost}${priceSuffix})</span>`;
@@ -2496,6 +2967,22 @@ const attachBuilderListeners = () => {
     .querySelector(".cancel-modal-btn")
     .addEventListener("click", () => closeModal(descriptionEditorModal));
   descriptionEditorForm.addEventListener("submit", handleSaveDescription);
+
+  descriptionEditorForm.addEventListener("submit", handleSaveDescription);
+
+  // ADD THESE NEW LISTENERS FOR THE SERVICE CONFIG MODAL
+  serviceConfigModal
+    .querySelector(".close-modal-btn")
+    .addEventListener("click", () => closeModal(serviceConfigModal));
+  serviceConfigModal
+    .querySelector(".cancel-modal-btn")
+    .addEventListener("click", () => closeModal(serviceConfigModal));
+  serviceEndDaySelect.addEventListener("change", generateServiceDayRows);
+  serviceConfigForm.addEventListener("submit", handleConfirmService);
+
+  // ADD THESE TWO LINES FOR THE MODAL DATE PICKERS
+  travelStartDateInput.addEventListener("change", handleModalDateChange);
+  travelEndDateInput.addEventListener("change", handleModalDateChange);
 
   builderListenersAttached = true;
   console.log("Builder listeners attached.");

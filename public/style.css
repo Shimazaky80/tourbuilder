@@ -882,6 +882,17 @@ select {
   margin-bottom: 0;
 }
 
+/* --- NEW: Alternating Item Backgrounds (Zebra Striping) --- */
+.day-items-list .itinerary-item:nth-child(even) {
+  background-color: var(--bg-dark); /* The slightly darker shade */
+}
+
+.day-items-list .itinerary-item:nth-child(odd) {
+  background-color: var(
+    --bg-medium-dark
+  ); /* The default, slightly lighter shade */
+}
+
 .item-details {
   flex-grow: 1;
   margin-right: 0.5rem;
@@ -1546,28 +1557,92 @@ select {
   font-size: 0.9rem;
 }
 
-/* --- Edit Description Icon Styles --- */
-.edit-description-btn {
+/* --- Item Action Button Styles --- */
+.edit-description-btn,
+.configure-service-btn {
   background: none;
-  border: 1px solid transparent;
+  border: none;
   color: var(--text-light-secondary);
-  padding: 4px 0;
+  padding: 4px; /* Give it a little more clickable space */
   font-size: 0.8rem;
   font-weight: 500;
   border-radius: var(--border-radius-md);
   cursor: pointer;
   margin-top: 8px;
-  display: block;
-  text-align: left;
+  display: inline-block; /* Allows buttons to be on the same line */
+  width: auto;
   transition: all 0.2s ease;
   box-shadow: none;
+  margin-right: 10px; /* Add space between buttons */
 }
 
-.edit-description-btn:hover {
+.edit-description-btn:hover,
+.configure-service-btn:hover {
   color: var(--accent-blue);
+  background: none; /* No background on hover */
 }
 
 .item-details .item-text {
   font-weight: 600;
   display: block;
+}
+
+/* --- Service Config Modal Styles --- */
+.modal-content.wide {
+  max-width: 800px; /* Wider modal for the config table */
+}
+
+.service-duration-controls {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.service-duration-controls .form-group {
+  flex: 1;
+}
+.service-duration-controls input[readonly] {
+  background-color: var(--bg-light-gray);
+  cursor: not-allowed;
+}
+
+#service-days-config-container {
+  max-height: 40vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-md);
+}
+
+.service-day-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 2fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.service-day-row:last-child {
+  border-bottom: none;
+}
+.service-day-row.has-conflict {
+  background-color: #fed7d7; /* Red background for warnings */
+}
+.service-day-row label {
+  font-weight: 600;
+}
+.service-day-row .rate-type-select {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+}
+
+.service-continuation-item {
+  opacity: 0.8;
+  border-style: dashed;
+}
+
+.service-continuation-item .item-pricing,
+.service-continuation-item .item-totals,
+.service-continuation-item .configure-service-btn {
+  display: none;
 }

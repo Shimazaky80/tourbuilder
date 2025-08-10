@@ -322,7 +322,7 @@ app.get("/api/items", authMiddleware, async (req, res) => {
       .from("items")
       .select(
         // Add max_occupancy from items and pricing_model/cost_per_unit from item_rates
-        `id, name, description, category, max_occupancy, supplier_id, suppliers!inner(id, name, is_active), item_rates!inner(id, rate_name, pricing_model, cost_per_person, cost_per_unit, currency_code, is_active)`
+        `id, name, description, category, sub_category, max_occupancy, supplier_id, suppliers!inner(id, name, is_active), item_rates!inner(id, rate_name, pricing_model, cost_per_person, cost_per_unit, currency_code, is_active)`
       )
       .eq("is_active", true)
       .eq("suppliers.is_active", true)
@@ -338,6 +338,70 @@ app.get("/api/items", authMiddleware, async (req, res) => {
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: "Could not fetch items: " + error.message });
+  }
+});
+
+app.post("/api/rates/metadata", authMiddleware, async (req, res) => {
+  const { rateIds } = req.body;
+  if (!rateIds || !Array.isArray(rateIds) || rateIds.length === 0) {
+    return res.json({});
+  }
+  try {
+    const { data, error } = await req.supabase
+      .from("item_rates")
+      .select(
+        "id, currency_code, pricing_model, cost_per_person, cost_per_unit"
+      )
+      .in("id", rateIds);
+    if (error) throw error;
+    const rateMetaMap = Object.fromEntries(data.map((r) => [r.id, r]));
+    res.json(rateMetaMap);
+  } catch (error) {
+    console.error("Error fetching rate metadata:", error.message);
+    res.status(500).json({ error: "Could not fetch rate metadata." });
+  }
+});
+
+app.post("/api/service-configs/bulk", authMiddleware, async (req, res) => {
+  const { dayItemIds } = req.body;
+  if (!dayItemIds || !Array.isArray(dayItemIds) || dayItemIds.length === 0) {
+    return res.json({});
+  }
+  try {
+    const { data, error } = await req.supabase
+      .from("itinerary_service_configs")
+      .select("*")
+      .in("itinerary_day_item_id", dayItemIds);
+    if (error) throw error;
+    const configsByItemId = data.reduce((acc, config) => {
+      const parentId = config.itinerary_day_item_id;
+      if (!acc[parentId]) acc[parentId] = [];
+      acc[parentId].push(config);
+      return acc;
+    }, {});
+    res.json(configsByItemId);
+  } catch (error) {
+    console.error("Error fetching service configs:", error.message);
+    res.status(500).json({ error: "Could not fetch service configs." });
+  }
+});
+
+app.get("/api/items/:itemId/rates", authMiddleware, async (req, res) => {
+  const { itemId } = req.params;
+  try {
+    const { data, error } = await req.supabase
+      .from("item_rates")
+      .select(
+        "*, items!inner(id, name, category, sub_category, max_occupancy, suppliers(name))"
+      )
+      .eq("item_id", itemId)
+      .eq("is_active", true);
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error("Error fetching item rates:", error.message);
+    res.status(500).json({ error: "Could not fetch item rates." });
   }
 });
 
@@ -380,18 +444,44 @@ app.post("/api/items/metadata", authMiddleware, async (req, res) => {
   try {
     const { data, error } = await req.supabase
       .from("items")
-      .select("id, max_occupancy")
+      // THIS IS THE FIX: Add sub_category to the select statement
+      .select("id, max_occupancy, sub_category")
       .in("id", itemIds);
 
     if (error) throw error;
 
     const itemMetaMap = Object.fromEntries(
-      data.map((i) => [i.id, { max_occupancy: i.max_occupancy }])
+      data.map((i) => [
+        i.id,
+        { max_occupancy: i.max_occupancy, sub_category: i.sub_category },
+      ])
     );
     res.json(itemMetaMap);
   } catch (error) {
     console.error("Error fetching item metadata:", error.message);
     res.status(500).json({ error: "Could not fetch item metadata." });
+  }
+});
+
+app.post("/api/rates/metadata", authMiddleware, async (req, res) => {
+  const { rateIds } = req.body;
+  if (!rateIds || !Array.isArray(rateIds) || rateIds.length === 0) {
+    return res.json({});
+  }
+  try {
+    const { data, error } = await req.supabase
+      .from("item_rates")
+      .select(
+        "id, currency_code, pricing_model, cost_per_person, cost_per_unit"
+      )
+      .in("id", rateIds);
+    if (error) throw error;
+    // Create a map for easy lookup on the client
+    const rateMetaMap = Object.fromEntries(data.map((r) => [r.id, r]));
+    res.json(rateMetaMap);
+  } catch (error) {
+    console.error("Error fetching rate metadata:", error.message);
+    res.status(500).json({ error: "Could not fetch rate metadata." });
   }
 });
 
@@ -466,6 +556,81 @@ app.put(
   }
 );
 
+app.post("/api/service-configs/bulk", authMiddleware, async (req, res) => {
+  const { dayItemIds } = req.body;
+  if (!dayItemIds || !Array.isArray(dayItemIds) || dayItemIds.length === 0) {
+    return res.json({});
+  }
+  try {
+    const { data, error } = await req.supabase
+      .from("itinerary_service_configs")
+      .select("*")
+      .in("itinerary_day_item_id", dayItemIds);
+
+    if (error) throw error;
+
+    // Group configs by their parent item ID for easy lookup on the client
+    const configsByItemId = data.reduce((acc, config) => {
+      const parentId = config.itinerary_day_item_id;
+      if (!acc[parentId]) {
+        acc[parentId] = [];
+      }
+      acc[parentId].push(config);
+      return acc;
+    }, {});
+
+    res.json(configsByItemId);
+  } catch (error) {
+    console.error("Error fetching service configs:", error.message);
+    res.status(500).json({ error: "Could not fetch service configs." });
+  }
+});
+
+app.post("/api/itinerary-item/service", authMiddleware, async (req, res) => {
+  const { itineraryDayItemData, serviceConfigData } = req.body;
+
+  try {
+    // Security Check: Verify the user owns the itinerary this day belongs to.
+    const { data: dayOwner, error: ownerError } = await req.supabase
+      .from("itinerary_days")
+      .select("itineraries!inner(user_id)")
+      .eq("id", itineraryDayItemData.itinerary_day_id)
+      .eq("itineraries.user_id", req.user.id)
+      .single();
+
+    if (ownerError || !dayOwner) {
+      return res.status(403).json({ error: "Access denied or day not found." });
+    }
+
+    // 1. Insert the main service item into itinerary_day_items
+    const { data: dayItem, error: dayItemError } = await req.supabase
+      .from("itinerary_day_items")
+      .insert(itineraryDayItemData)
+      .select("id")
+      .single();
+
+    if (dayItemError) throw dayItemError;
+
+    // 2. Prepare the per-day config data with the ID from the item we just created
+    const configsToInsert = serviceConfigData.map((config) => ({
+      ...config,
+      itinerary_day_item_id: dayItem.id,
+    }));
+
+    // 3. Insert all the per-day configurations
+    const { error: serviceConfigError } = await req.supabase
+      .from("itinerary_service_configs")
+      .insert(configsToInsert);
+
+    if (serviceConfigError) throw serviceConfigError;
+
+    res.status(201).json({ dayItem });
+  } catch (error) {
+    console.error("Error saving service configuration:", error.message);
+    res.status(500).json({ error: "Failed to save service configuration." });
+  }
+});
+
 app.put("/api/itineraries/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;
   const { itineraryData, daysData } = req.body;
@@ -476,32 +641,50 @@ app.put("/api/itineraries/:id", authMiddleware, async (req, res) => {
       .eq("id", id)
       .eq("user_id", req.user.id);
     if (itineraryUpdateError) throw itineraryUpdateError;
+
     const { error: deleteDaysError } = await req.supabase
       .from("itinerary_days")
       .delete()
       .eq("itinerary_id", id);
     if (deleteDaysError) throw deleteDaysError;
+
+    const savedDaysData = [];
     for (const day of daysData) {
-      const { items, ...dayDetails } = day;
+      // FIX: Destructure and discard the 'id' from the day object sent by the client.
+      const { items, id: oldDayId, ...dayDetails } = day;
       const { data: newDay, error: dayInsertError } = await req.supabase
         .from("itinerary_days")
+        // The dayDetails object no longer contains an 'id', so the DB will generate a new one.
         .insert([{ ...dayDetails, itinerary_id: id }])
-        .select("id")
+        .select("id, day_number")
         .single();
       if (dayInsertError) throw dayInsertError;
+
+      savedDaysData.push(newDay);
+
       if (items && items.length > 0) {
-        const itemsToInsert = items.map((item) => ({
-          ...item,
-          itinerary_day_id: newDay.id,
-        }));
+        // FIX: Map over the items and discard the 'id' from each one.
+        const itemsToInsert = items.map((item) => {
+          const { id: oldItemId, ...itemDetails } = item;
+          return {
+            ...itemDetails,
+            itinerary_day_id: newDay.id, // Use the newly created day's ID.
+          };
+        });
         const { error: itemsInsertError } = await req.supabase
           .from("itinerary_day_items")
+          // The items being inserted no longer have an 'id' property.
           .insert(itemsToInsert);
         if (itemsInsertError) throw itemsInsertError;
       }
     }
-    res.status(200).json({ message: "Itinerary saved successfully." });
+    // Return the newly created day data
+    res.status(200).json({
+      message: "Itinerary saved successfully.",
+      savedDays: savedDaysData,
+    });
   } catch (error) {
+    console.error("Save Itinerary Error:", error);
     res
       .status(500)
       .json({ error: "Failed to save itinerary: " + error.message });
