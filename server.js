@@ -665,10 +665,36 @@ app.put("/api/itineraries/:id", authMiddleware, async (req, res) => {
       if (items && items.length > 0) {
         // FIX: Map over the items and discard the 'id' from each one.
         const itemsToInsert = items.map((item) => {
-          const { id: oldItemId, ...itemDetails } = item;
+          // Destructure only the properties we expect from the client.
+          const {
+            id: oldItemId, // This is discarded.
+            is_included,
+            parent_day_item_id,
+            // Capture the rest of the known fields.
+            item_rate_id,
+            item_text,
+            item_price_per_person,
+            selling_price_per_person_override,
+            item_order,
+            custom_item_description,
+            library_item_id,
+            service_config_id,
+          } = item;
+
+          // Build the exact object we want to insert into the database.
           return {
-            ...itemDetails,
-            itinerary_day_id: newDay.id, // Use the newly created day's ID.
+            itinerary_day_id: newDay.id,
+            is_included: is_included, // Now explicitly included
+            parent_day_item_id: parent_day_item_id || null, // Handle undefined case
+            item_rate_id,
+            item_text,
+            item_price_per_person,
+            selling_price_per_person_override,
+            item_order,
+
+            custom_item_description,
+            library_item_id,
+            service_config_id,
           };
         });
         const { error: itemsInsertError } = await req.supabase

@@ -153,6 +153,14 @@ const configuringItemInstanceIdInput = document.getElementById(
   "configuring-item-instance-id"
 );
 const configuringItemIdInput = document.getElementById("configuring-item-id");
+const addAlternativeModal = document.getElementById("add-alternative-modal");
+const alternativeItemSearchInput = document.getElementById(
+  "alternative-item-search"
+);
+const alternativeItemsListContainer = document.getElementById(
+  "alternative-items-list-container"
+);
+const primaryDayItemIdInput = document.getElementById("primary-day-item-id");
 
 // --- State Variables ---
 let currentUser = null;
@@ -833,6 +841,8 @@ const saveItinerary = async (showAlert = true) => {
           custom_item_description: itemEl.dataset.customDescription || null,
           library_item_id: itemEl.dataset.libraryItemId || null,
           service_config_id: itemEl.dataset.serviceConfigId || null,
+          is_included: itemEl.dataset.isIncluded === "true",
+          parent_day_item_id: itemEl.dataset.parentDayItemId || null,
         });
       });
       daysData.push({
@@ -1034,6 +1044,7 @@ const loadItinerary = async (itineraryDbId) => {
           maxOccupancy: itemMeta.max_occupancy,
           subCategory: itemMeta.sub_category,
           serviceConfigs: serviceConfigs,
+          is_included: itm.is_included,
         });
 
         dayItemsList.appendChild(itemElement);
@@ -1047,6 +1058,7 @@ const loadItinerary = async (itineraryDbId) => {
     updateGrandTotal();
     updateMetadataDisplay();
     updateServiceDayHighlights();
+    updateAccommodationGroups();
     showPage(mainAppWrapper);
     if (!builderListenersAttached) attachBuilderListeners();
 
@@ -1172,18 +1184,30 @@ function updateItemFinancialsDisplay(itemElement) {
   }
 
   const itemCategory = itemElement.dataset.itemType;
+
+  // First, always remove any pre-existing warning to prevent duplicates
+  const existingWarning = itemElement.querySelector(".item-warning-message");
+  if (existingWarning) existingWarning.remove();
+  itemElement.classList.remove("warning");
+
   if (
+    itemCategory &&
     ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
     maxOccupancy
   ) {
     if (totalPax > maxOccupancy) {
-      const warningDiv = document.createElement("div");
-      warningDiv.className = "item-warning";
-      warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
-      itemElement
-        .querySelector(".item-details")
-        .insertBefore(warningDiv, itemElement.querySelector(".item-pricing"));
-      itemElement.classList.add("warning");
+      // Find the correct parent element for the warning message
+      const pricingDiv = itemElement.querySelector(".item-pricing");
+      if (pricingDiv && pricingDiv.parentNode) {
+        const warningDiv = document.createElement("div");
+        // Use a more specific class to avoid conflicts with the placeholder
+        warningDiv.className = "item-warning-message item-warning";
+        warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
+
+        // Insert the warning message before the pricing div, within its direct parent
+        pricingDiv.parentNode.insertBefore(warningDiv, pricingDiv);
+        itemElement.classList.add("warning");
+      }
     }
   }
 
@@ -1236,6 +1260,7 @@ const updateAllItemFinancialDisplays = () => {
     .forEach(updateItemFinancialsDisplay);
 };
 
+// --- START OF NEW, CORRECTED configureItineraryItem FUNCTION ---
 const configureItineraryItem = (itemElement, sourceData = {}) => {
   if (!itemElement) return;
 
@@ -1249,7 +1274,7 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
     sourceData.cost || sourceData.price || sourceData.cost_per_person || "0"
   );
   const displayText =
-    (sourceData.displayText || sourceData.item_text) ?? "(Untitled Item)";
+    sourceData.displayText || sourceData.item_text || "(Untitled Item)";
 
   itemElement.dataset.costPrice = costPrice.toFixed(2);
   itemElement.dataset.displayText = displayText;
@@ -1269,6 +1294,8 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.dataset.maxOccupancy = sourceData.maxOccupancy || "0";
   itemElement.dataset.itemMarkup = sourceData.itemMarkup ?? "";
   itemElement.dataset.serviceConfigs = JSON.stringify(serviceConfigs);
+  // NEW: Make sure parent ID is always set from source data
+  itemElement.dataset.parentDayItemId = sourceData.parent_day_item_id || "";
 
   let initialSellingPrice = parseFloat(
     sourceData.selling_price_per_person_override
@@ -1284,15 +1311,21 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
 
   itemElement.innerHTML = `
     <div class="item-details">
-      <span class="item-text">${displayText.replace(/</g, "<")}</span>
-      <div class="item-warning"></div>
-      <div class="item-pricing">
-        <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span> 
-        <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span> 
-        <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span>
-      </div>
-      <div class="item-actions">
-        <button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button>
+      <div style="display: flex; align-items: flex-start;">
+        <div class="alternative-control-placeholder"></div>
+        <div style="flex-grow: 1;">
+          <span class="item-text">${displayText.replace(/</g, "<")}</span>
+          <div class="item-warning"></div>
+          <div class="item-pricing">
+            <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span>
+            <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span>
+            <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span>
+          </div>
+          <div class="item-actions">
+            <button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button>
+            <div class="optional-control-placeholder" style="display: inline-block;"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="item-totals">
@@ -1300,6 +1333,49 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
       <span class="total-item-selling">Total Sell: $0.00</span>
       <button class="delete-item-btn" title="Delete item">✕</button>
     </div>`;
+
+  const itemCategory = sourceData.itemType || "other";
+
+  // --- Universal Logic for Included/Not Included Status ---
+  const isIncluded = sourceData.is_included === false ? false : true;
+  itemElement.dataset.isIncluded = isIncluded;
+
+  if (!isIncluded) {
+    itemElement.classList.add("is-optional-not-included");
+    if (itemCategory.toLowerCase() !== "room") {
+      const itemTextElement = itemElement.querySelector(".item-text");
+      if (
+        itemTextElement &&
+        !itemTextElement.querySelector(".optional-label-text")
+      ) {
+        const optionalLabel = document.createElement("span");
+        optionalLabel.className = "optional-label-text";
+        optionalLabel.textContent = "(Optional)";
+        itemTextElement.appendChild(optionalLabel);
+      }
+    }
+  }
+
+  // --- Category-Specific UI Controls ---
+  if (
+    ["Excursion", "Meal", "Safari", "Activity", "Transfer", "Vehicle"].includes(
+      itemCategory
+    )
+  ) {
+    const optionalPlaceholder = itemElement.querySelector(
+      ".optional-control-placeholder"
+    );
+    optionalPlaceholder.innerHTML = `
+        <span class="optional-controls">
+            <input type="checkbox" id="optional-${
+              itemElement.dataset.instanceId
+            }" ${isIncluded ? "checked" : ""}>
+            <label for="optional-${
+              itemElement.dataset.instanceId
+            }">Include in Total</label>
+        </span>
+    `;
+  }
 
   itemElement.addEventListener("dragstart", handleDragStart);
   itemElement.addEventListener("dragend", handleDragEnd);
@@ -1315,6 +1391,7 @@ const updateGrandTotal = () => {
 
   // 1. Group totals by currency, respecting the pricing model
   daysContainer?.querySelectorAll(".itinerary-item").forEach((itemEl) => {
+    if (itemEl.dataset.isIncluded === "false") return; // Skip optional items that are not included
     const currencyCode =
       itemEl.dataset.currencyCode || currentItineraryCurrency;
     const pricingModel = itemEl.dataset.pricingModel || "per_person";
@@ -1537,6 +1614,7 @@ const handleDragLeave = (event) => {
     removeDropIndicator();
   }
 };
+
 const handleDrop = async (event) => {
   event.preventDefault();
   removeDropIndicator();
@@ -1554,7 +1632,6 @@ const handleDrop = async (event) => {
   );
   let elementToAdd;
 
-  // THIS IS THE DEFINITIVE FIX
   const targetDayElement = dropZone.closest(".day");
   if (!targetDayElement.dataset.dbId) {
     console.log("Target day is new. Saving itinerary first...");
@@ -1576,18 +1653,137 @@ const handleDrop = async (event) => {
       subCategory: currentlyDraggedElement.dataset.subCategory,
     };
 
+    elementToAdd = document.createElement("div");
+
+    // Case 1: The dropped item is a Guide or Driver. This is a special case.
     if (itemData.subCategory === "Guide" || itemData.subCategory === "Driver") {
       openServiceConfigModal(itemData, targetDayElement);
       currentlyDraggedElement = null;
       return;
-    } else {
-      elementToAdd = document.createElement("div");
-      configureItineraryItem(elementToAdd, itemData);
     }
-  } else {
+
+    // Case 2: The dropped item is Accommodation ('Room'). It has its own logic path.
+    else if (itemData.itemType && itemData.itemType.toLowerCase() === "room") {
+      const primaryAccommodation = targetDayElement.querySelector(
+        '.itinerary-item[data-item-type="Room"][data-is-included="true"]'
+      );
+
+      // If a primary already exists, this new one is an alternative.
+      if (primaryAccommodation) {
+        itemData.is_included = false;
+        itemData.parent_day_item_id = primaryAccommodation.dataset.dbId;
+      }
+
+      // Now, configure the first item with its properties.
+      configureItineraryItem(elementToAdd, itemData);
+
+      // It also gets the continuation prompt.
+      const promptDiv = document.createElement("div");
+      promptDiv.className = "item-continuation-prompt";
+      promptDiv.innerHTML = `
+        <label for="continue-days">Continue for:</label>
+        <input type="number" id="continue-days" value="0" min="0" />
+        <label>more day(s)</label>
+        <button class="confirm-continuation-btn">Confirm</button>
+      `;
+      elementToAdd.appendChild(promptDiv);
+
+      const confirmBtn = promptDiv.querySelector(".confirm-continuation-btn");
+      confirmBtn.addEventListener(
+        "click",
+        () => {
+          const daysToContinue =
+            parseInt(promptDiv.querySelector("input").value) || 0;
+          promptDiv.remove();
+
+          if (daysToContinue > 0) {
+            let currentDayEl = targetDayElement;
+            for (let i = 0; i < daysToContinue; i++) {
+              const nextDayEl = currentDayEl.nextElementSibling;
+              if (nextDayEl && nextDayEl.classList.contains("day")) {
+                const nextDropZone = nextDayEl.querySelector(".day-items-list");
+                const clonedItem = elementToAdd.cloneNode(true);
+                clonedItem.dataset.instanceId = `inst-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .substr(2, 5)}`;
+                nextDropZone.appendChild(clonedItem);
+                currentDayEl = nextDayEl;
+              } else {
+                break;
+              }
+            }
+          }
+
+          // CRITICAL: Call the UI updates immediately after placing all clones.
+          updateAccommodationGroups();
+          updateGrandTotal();
+          saveItinerary(false);
+        },
+        { once: true }
+      );
+
+      dropZone.appendChild(elementToAdd);
+      currentlyDraggedElement = null;
+      return; // Stop here, save is handled by confirm button.
+    }
+    // Case 3: The dropped item is a regular item (Transfers, Activities, etc.).
+    else {
+      configureItineraryItem(elementToAdd, itemData);
+
+      const promptDiv = document.createElement("div");
+      promptDiv.className = "item-continuation-prompt";
+      promptDiv.innerHTML = `
+        <label for="continue-days">Continue for:</label>
+        <input type="number" id="continue-days" value="0" min="0" />
+        <label>more day(s)</label>
+        <button class="confirm-continuation-btn">Confirm</button>
+      `;
+      elementToAdd.appendChild(promptDiv);
+
+      const confirmBtn = promptDiv.querySelector(".confirm-continuation-btn");
+      confirmBtn.addEventListener(
+        "click",
+        () => {
+          const daysToContinue =
+            parseInt(promptDiv.querySelector("input").value) || 0;
+          promptDiv.remove();
+
+          if (daysToContinue > 0) {
+            let currentDayEl = targetDayElement;
+            for (let i = 0; i < daysToContinue; i++) {
+              const nextDayEl = currentDayEl.nextElementSibling;
+              if (nextDayEl && nextDayEl.classList.contains("day")) {
+                const nextDropZone = nextDayEl.querySelector(".day-items-list");
+                const clonedItem = elementToAdd.cloneNode(true);
+                clonedItem.dataset.instanceId = `inst-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .substr(2, 5)}`;
+                nextDropZone.appendChild(clonedItem);
+                currentDayEl = nextDayEl;
+              } else {
+                break;
+              }
+            }
+          }
+
+          updateGrandTotal();
+          updateServiceDayHighlights();
+          saveItinerary();
+        },
+        { once: true }
+      );
+
+      dropZone.appendChild(elementToAdd);
+      currentlyDraggedElement = null;
+      return;
+    }
+  }
+  // This handles items being re-ordered within the itinerary (not from the sidebar)
+  else {
     elementToAdd = currentlyDraggedElement;
   }
 
+  // Logic for placing the item within the drop zone
   let droppedOnItem = event.target.closest(".itinerary-item:not(.dragging)");
   if (droppedOnItem && droppedOnItem.parentNode === dropZone) {
     const rect = droppedOnItem.getBoundingClientRect();
@@ -1600,8 +1796,10 @@ const handleDrop = async (event) => {
     dropZone.appendChild(elementToAdd);
   }
 
+  // Final updates after any drop
   updateGrandTotal();
   updateServiceDayHighlights();
+  updateAccommodationGroups(); // Ensure groups are redrawn on re-ordering
   saveItinerary();
   currentlyDraggedElement = null;
 };
@@ -1753,20 +1951,78 @@ const handleNumPeopleChange = (event) => {
 const handleDaysContainerClick = (event) => {
   const target = event.target;
 
+  if (target.classList.contains("set-primary-btn")) {
+    const newPrimaryItemEl = target.closest(".itinerary-item");
+    const clickedDayEl = newPrimaryItemEl.closest(".day");
+    const groupOnClickedDay = newPrimaryItemEl.closest(".accommodation-group");
+    if (!newPrimaryItemEl || !clickedDayEl || !groupOnClickedDay) return;
+
+    // 1. Identify all hotels that are part of this comparison group on the clicked day
+    const accommodationLibraryIdsInGroup = Array.from(
+      groupOnClickedDay.querySelectorAll(
+        '.itinerary-item[data-item-type="Room"]'
+      )
+    ).map((el) => el.dataset.libraryItemId);
+
+    const newPrimaryLibraryId = newPrimaryItemEl.dataset.libraryItemId;
+
+    // 2. Find all days in the itinerary that contain this exact same group of hotels
+    const allDayElements = Array.from(daysContainer.querySelectorAll(".day"));
+    const affectedDayElements = allDayElements.filter((dayEl) => {
+      const libraryIdsOnThisDay = Array.from(
+        dayEl.querySelectorAll('.itinerary-item[data-item-type="Room"]')
+      ).map((el) => el.dataset.libraryItemId);
+
+      return (
+        accommodationLibraryIdsInGroup.length === libraryIdsOnThisDay.length &&
+        accommodationLibraryIdsInGroup.every((id) =>
+          libraryIdsOnThisDay.includes(id)
+        )
+      );
+    });
+
+    // 3. Loop through all affected days and apply the primary status change
+    affectedDayElements.forEach((dayEl) => {
+      const newPrimaryOnThisDay = dayEl.querySelector(
+        `.itinerary-item[data-library-item-id="${newPrimaryLibraryId}"]`
+      );
+      if (!newPrimaryOnThisDay) return;
+
+      dayEl
+        .querySelectorAll('.itinerary-item[data-item-type="Room"]')
+        .forEach((itemEl) => {
+          if (itemEl.dataset.libraryItemId === newPrimaryLibraryId) {
+            itemEl.dataset.isIncluded = "true";
+            itemEl.dataset.parentDayItemId = "";
+          } else {
+            itemEl.dataset.isIncluded = "false";
+            itemEl.dataset.parentDayItemId = newPrimaryOnThisDay.dataset.dbId;
+          }
+        });
+    });
+
+    // 4. Redraw UI, recalculate total, and save
+    updateAccommodationGroups();
+    updateGrandTotal();
+    saveItinerary();
+    return;
+  }
+
   if (target.classList.contains("edit-description-btn")) {
     const itemElement = target.closest(".itinerary-item");
     if (itemElement) {
       openDescriptionEditor(itemElement);
     }
-    return; // Stop further execution
-  } else if (target.classList.contains("configure-service-btn")) {
+    return;
+  }
+
+  if (target.classList.contains("configure-service-btn")) {
     const clickedItemEl = target.closest(".itinerary-item");
     const startDayEl = clickedItemEl.closest(".day");
     const libraryItemId = clickedItemEl.dataset.libraryItemId;
 
     if (!libraryItemId) return;
 
-    // Find all items that are part of this service run
     const serviceItemsToRemove = [];
     let currentDay = startDayEl;
     while (currentDay) {
@@ -1776,7 +2032,6 @@ const handleDaysContainerClick = (event) => {
       if (serviceItemInDay) {
         serviceItemsToRemove.push(serviceItemInDay);
       } else {
-        // Stop when we hit a day without this service item
         break;
       }
       currentDay = currentDay.nextElementSibling;
@@ -1787,20 +2042,42 @@ const handleDaysContainerClick = (event) => {
         "This will replace the current service run. Are you sure you want to re-configure it?"
       )
     ) {
-      // Remove all the old items from the itinerary
       serviceItemsToRemove.forEach((item) => item.remove());
-
-      // Prepare data from the *original* item to open the modal fresh
       const itemData = {
         displayText: clickedItemEl.dataset.displayText,
         itemId: clickedItemEl.dataset.libraryItemId,
         subCategory: clickedItemEl.dataset.subCategory,
-        // Other necessary data could be added here if needed
       };
-
-      // Open the modal to start the configuration process over
       openServiceConfigModal(itemData, startDayEl);
     }
+    return;
+  }
+
+  if (target.type === "checkbox" && target.id.startsWith("optional-")) {
+    const itemElement = target.closest(".itinerary-item");
+    if (!itemElement) return;
+
+    const itemTextElement = itemElement.querySelector(".item-text");
+    const existingLabel = itemTextElement.querySelector(".optional-label-text");
+
+    if (target.checked) {
+      itemElement.dataset.isIncluded = "true";
+      itemElement.classList.remove("is-optional-not-included");
+      if (existingLabel) {
+        existingLabel.remove();
+      }
+    } else {
+      itemElement.dataset.isIncluded = "false";
+      itemElement.classList.add("is-optional-not-included");
+      if (!existingLabel) {
+        const newLabel = document.createElement("span");
+        newLabel.className = "optional-label-text";
+        newLabel.textContent = "(Optional)";
+        itemTextElement.appendChild(newLabel);
+      }
+    }
+    updateGrandTotal();
+    // No need to save immediately, let user make multiple changes
     return;
   }
 
@@ -1816,25 +2093,57 @@ const handleDaysContainerClick = (event) => {
         saveItinerary();
       }
     }
-  } else if (target.classList.contains("delete-item-btn")) {
-    const itemToDelete = target.closest(".itinerary-item");
-    if (itemToDelete) {
-      itemToDelete.remove();
-      updateGrandTotal();
-      saveItinerary();
-    }
-  } else if (target.classList.contains("item-warning")) {
-    const itemEl = event.target.closest(".itinerary-item");
-    if (!itemEl) return;
+    return;
+  }
 
-    if (itemEl.querySelector(".item-replacement-container")) return;
+  if (target.classList.contains("delete-item-btn")) {
+    const itemToDelete = target.closest(".itinerary-item");
+    if (!itemToDelete) return;
+
+    // Check if the deleted item is part of a multi-day accommodation run
+    const libraryIdToDelete = itemToDelete.dataset.libraryItemId;
+    const isAccommodation =
+      itemToDelete.dataset.itemType.toLowerCase() === "room";
+
+    // Find all items with the same library ID across all days
+    const allInstances = document.querySelectorAll(
+      `.itinerary-item[data-library-item-id="${libraryIdToDelete}"]`
+    );
+
+    // If it's an accommodation and it appears on more than one day, ask the user what to do
+    if (isAccommodation && allInstances.length > 1) {
+      if (
+        confirm(
+          `This accommodation appears on multiple days.\n\nOK: Delete from ALL days.\nCancel: Delete from THIS day only.`
+        )
+      ) {
+        // Delete from all days
+        allInstances.forEach((item) => item.remove());
+      } else {
+        // Delete from this day only
+        itemToDelete.remove();
+      }
+    } else {
+      // If it's not a multi-day accommodation, just delete it
+      itemToDelete.remove();
+    }
+
+    // Always update UI and save after any deletion
+    updateAccommodationGroups();
+    updateGrandTotal();
+    updateServiceDayHighlights();
+    saveItinerary();
+    return;
+  }
+
+  if (target.classList.contains("item-warning")) {
+    const itemEl = target.closest(".itinerary-item");
+    if (!itemEl || itemEl.querySelector(".item-replacement-container")) return;
 
     const currentItemId = itemEl.dataset.libraryItemId;
     const currentCurrency = itemEl.dataset.currencyCode;
     const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-    // THIS IS THE CORRECTED LOGIC
-    // 1. Find the original library item to get its exact supplierName
     const originalItem = allAvailableLibraryItems.find(
       (item) => item.itemId === currentItemId
     );
@@ -1844,7 +2153,6 @@ const handleDaysContainerClick = (event) => {
     }
     const supplierName = originalItem.supplierName;
 
-    // 2. Now filter using the correct supplierName
     const replacementOptions = allAvailableLibraryItems.filter(
       (item) =>
         item.supplierName === supplierName &&
@@ -1856,14 +2164,10 @@ const handleDaysContainerClick = (event) => {
     if (replacementOptions.length > 0) {
       const container = document.createElement("div");
       container.className = "item-replacement-container";
-
-      const label = document.createElement("label");
-      label.textContent = "Choose a suitable replacement:";
-
+      container.innerHTML = `<label>Choose a suitable replacement:</label>`;
       const select = document.createElement("select");
       select.className = "item-replacement-select";
       select.innerHTML = `<option value="">Select a vehicle...</option>`;
-
       replacementOptions.forEach((opt) => {
         select.innerHTML += `<option value="${opt.itemRateId}">${
           opt.itemName
@@ -1872,10 +2176,7 @@ const handleDaysContainerClick = (event) => {
           opt.currencyCode
         )}</option>`;
       });
-
       select.addEventListener("change", handleItemReplacement);
-
-      container.appendChild(label);
       container.appendChild(select);
       target.innerHTML = "";
       target.appendChild(container);
@@ -2181,6 +2482,167 @@ const handleConfirmService = async (event) => {
     hideLoadingSpinner();
     closeModal(serviceConfigModal);
   }
+};
+
+const openAddAlternativeModal = (primaryItemEl) => {
+  // Store the DB ID of the item we're adding an alternative to.
+  primaryDayItemIdInput.value = primaryItemEl.dataset.dbId;
+
+  // Clear previous search results and open the modal.
+  alternativeItemSearchInput.value = "";
+  alternativeItemsListContainer.innerHTML =
+    "<p>Start typing to search for accommodation...</p>";
+  openModal(addAlternativeModal);
+  alternativeItemSearchInput.focus();
+};
+
+const handleAlternativeSearch = () => {
+  const searchTerm = alternativeItemSearchInput.value.trim().toLowerCase();
+  const primaryItemId = primaryDayItemIdInput.value;
+  const primaryItemEl = document.querySelector(
+    `[data-db-id="${primaryItemId}"]`
+  );
+  const currencyCode = primaryItemEl.dataset.currencyCode;
+
+  if (searchTerm.length < 2) {
+    alternativeItemsListContainer.innerHTML =
+      "<p>Please enter at least 2 characters.</p>";
+    return;
+  }
+
+  // Filter the main library for items that are Accommodation and match the search.
+  const results = allAvailableLibraryItems.filter(
+    (item) =>
+      item.category &&
+      item.category.toLowerCase() === "room" &&
+      item.currencyCode === currencyCode &&
+      (item.itemName.toLowerCase().includes(searchTerm) ||
+        item.supplierName.toLowerCase().includes(searchTerm))
+  );
+
+  alternativeItemsListContainer.innerHTML = ""; // Clear previous results
+
+  if (results.length === 0) {
+    alternativeItemsListContainer.innerHTML =
+      "<p>No matching accommodation found.</p>";
+  } else {
+    results.forEach((itemData) => {
+      const resultDiv = document.createElement("div");
+      resultDiv.className = "alternative-search-result-item";
+      // Store the item's data on the element itself for easy access.
+      resultDiv.dataset.itemData = JSON.stringify(itemData);
+      resultDiv.innerHTML = `
+        <h4>${itemData.supplierName} - ${itemData.itemName}</h4>
+        <p>${formatCurrency(itemData.cost, itemData.currencyCode)} ${
+        itemData.pricingModel === "per_unit" ? "per unit" : "pp"
+      }</p>
+      `;
+      // Add a click listener to add this item as an alternative.
+      resultDiv.addEventListener("click", handleAddAlternative);
+      alternativeItemsListContainer.appendChild(resultDiv);
+    });
+  }
+};
+
+const handleAddAlternative = (event) => {
+  const resultDiv = event.currentTarget;
+  const itemData = JSON.parse(resultDiv.dataset.itemData);
+  const primaryItemId = primaryDayItemIdInput.value;
+  const primaryItemEl = document.querySelector(
+    `[data-db-id="${primaryItemId}"]`
+  );
+  const dayList = primaryItemEl.closest(".day-items-list");
+
+  // Create the new alternative item element.
+  const alternativeEl = document.createElement("div");
+  // CRITICAL: Configure the new item, linking it to the primary item.
+  configureItineraryItem(alternativeEl, {
+    ...itemData, // All the data from the library item
+    price: itemData.cost,
+    displayText: `${itemData.supplierName} - ${itemData.itemName}`,
+    itemId: itemData.itemId,
+    itemType: itemData.category,
+    // Set this alternative as NOT included by default.
+    is_included: false,
+    // Link it to its parent.
+    parent_day_item_id: primaryItemId,
+  });
+
+  // Add the new element to the itinerary, right after its parent.
+  primaryItemEl.after(alternativeEl);
+
+  // Close the modal and update the UI.
+  closeModal(addAlternativeModal);
+  updateAccommodationGroups(); // This is a new function we will create next.
+  updateGrandTotal();
+  saveItinerary();
+};
+
+const updateAccommodationGroups = () => {
+  // Undo existing grouping to redraw from a clean state
+  daysContainer.querySelectorAll(".accommodation-group").forEach((groupEl) => {
+    while (groupEl.firstChild) {
+      groupEl.parentNode.insertBefore(groupEl.firstChild, groupEl);
+    }
+    groupEl.remove();
+  });
+
+  // Process each day individually
+  daysContainer.querySelectorAll(".day").forEach((dayEl) => {
+    const accommodationItems = dayEl.querySelectorAll(
+      '.itinerary-item[data-item-type="Room"]'
+    );
+    if (accommodationItems.length <= 1) return; // No need to group
+
+    let primaryItem = dayEl.querySelector(
+      '.itinerary-item[data-item-type="Room"][data-is-included="true"]'
+    );
+
+    // If no primary is explicitly set, make the first one the primary by default.
+    if (!primaryItem && accommodationItems.length > 0) {
+      primaryItem = accommodationItems[0];
+      primaryItem.dataset.isIncluded = "true";
+    }
+
+    if (!primaryItem) return; // Safeguard if no items are found
+
+    // Create the group wrapper and add all items to it
+    const groupWrapper = document.createElement("div");
+    groupWrapper.className = "accommodation-group";
+    accommodationItems[0].parentNode.insertBefore(
+      groupWrapper,
+      accommodationItems[0]
+    );
+    accommodationItems.forEach((item) => groupWrapper.appendChild(item));
+
+    // Add badges and buttons to each item in the group
+    groupWrapper.querySelectorAll(".itinerary-item").forEach((itemEl) => {
+      // Clear any old controls first
+      const existingBadge = itemEl.querySelector(".primary-badge");
+      if (existingBadge) existingBadge.remove();
+      const existingBtn = itemEl.querySelector(".set-primary-btn");
+      if (existingBtn) existingBtn.remove();
+
+      const itemText = itemEl.querySelector(".item-text");
+      // Use instanceId for a reliable comparison, as dbId may not exist yet on new items
+      if (itemEl.dataset.instanceId === primaryItem.dataset.instanceId) {
+        // This is the primary
+        const badge = document.createElement("span");
+        badge.className = "primary-badge";
+        badge.textContent = "⭐ Primary";
+        itemText.appendChild(badge);
+        itemEl.classList.remove("is-optional-not-included");
+      } else {
+        // This is an alternative
+        const actionsDiv = itemEl.querySelector(".item-actions");
+        const setPrimaryBtn = document.createElement("button");
+        setPrimaryBtn.className = "set-primary-btn";
+        setPrimaryBtn.textContent = "Set as Primary";
+        actionsDiv.appendChild(setPrimaryBtn);
+        itemEl.classList.add("is-optional-not-included");
+      }
+    });
+  });
 };
 
 const enterPriceEditMode = (itemElement, priceSpan, priceType) => {
@@ -2977,8 +3439,21 @@ const attachBuilderListeners = () => {
   serviceConfigModal
     .querySelector(".cancel-modal-btn")
     .addEventListener("click", () => closeModal(serviceConfigModal));
+
   serviceEndDaySelect.addEventListener("change", generateServiceDayRows);
   serviceConfigForm.addEventListener("submit", handleConfirmService);
+
+  // ADD LISTENERS FOR THE ADD ALTERNATIVE MODAL
+  addAlternativeModal
+    .querySelector(".close-modal-btn")
+    .addEventListener("click", () => closeModal(addAlternativeModal));
+  alternativeItemSearchInput.addEventListener(
+    "input",
+    debounce(handleAlternativeSearch, 300)
+  );
+  addAlternativeModal
+    .querySelector(".cancel-modal-btn")
+    .addEventListener("click", () => closeModal(addAlternativeModal));
 
   // ADD THESE TWO LINES FOR THE MODAL DATE PICKERS
   travelStartDateInput.addEventListener("change", handleModalDateChange);

@@ -496,6 +496,31 @@
       </div>
     </div>
 
+    <!-- ===== Modal for Adding Alternative Accommodation ===== -->
+    <div class="modal-overlay" id="add-alternative-modal" style="display: none">
+      <div class="modal-content">
+        <button class="close-modal-btn" aria-label="Close">×</button>
+        <h2 id="alternative-modal-title">Add Alternative Accommodation</h2>
+        <div class="form-group">
+          <label for="alternative-item-search"
+            >Search for an alternative hotel/lodge:</label
+          >
+          <input
+            type="text"
+            id="alternative-item-search"
+            placeholder="Search by name, area, etc..."
+          />
+        </div>
+        <div id="alternative-items-list-container">
+          <!-- Search results will be populated here by JS -->
+        </div>
+        <input type="hidden" id="primary-day-item-id" />
+        <div class="form-actions">
+          <button type="button" class="cancel-modal-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>

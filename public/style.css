@@ -1557,6 +1557,39 @@ select {
   font-size: 0.9rem;
 }
 
+.item-continuation-prompt {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-medium);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.item-continuation-prompt label {
+  color: var(--text-light-secondary);
+}
+
+.item-continuation-prompt input {
+  width: 50px;
+  padding: 2px 5px;
+  background-color: var(--bg-dark);
+  color: var(--text-light-primary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+}
+
+.item-continuation-prompt button {
+  background-color: var(--accent-green);
+  color: var(--bg-light);
+  border: none;
+  padding: 3px 8px;
+  font-size: 0.8rem;
+  box-shadow: none;
+}
+
 /* --- Item Action Button Styles --- */
 .edit-description-btn,
 .configure-service-btn {
@@ -1646,3 +1679,131 @@ select {
 .service-continuation-item .configure-service-btn {
   display: none;
 }
+
+/* --- Alternative Accommodation Styles --- */
+.accommodation-group {
+  border: 1px solid var(--border-medium);
+  border-radius: var(--border-radius-md);
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background-color: #3c4a61; /* A slightly different background to show grouping */
+}
+
+.accommodation-group .itinerary-item {
+  background-color: var(--bg-medium-dark); /* Reset item color inside group */
+}
+
+.accommodation-group .itinerary-item:not(:last-child) {
+  margin-bottom: 0.75rem;
+}
+
+.alternative-controls {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+}
+
+.alternative-controls input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  accent-color: var(--accent-green);
+}
+
+.add-alternative-btn {
+  background-color: transparent;
+  border: 1px dashed var(--text-light-secondary);
+  color: var(--text-light-secondary);
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.add-alternative-btn:hover {
+  background-color: var(--bg-dark);
+  color: var(--text-light-primary);
+  border-style: solid;
+}
+
+/* --- Optional Item Styles --- */
+.optional-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.optional-controls label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light-secondary);
+  cursor: pointer;
+}
+
+.optional-controls input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+
+/* Style for items that are marked as optional (i.e., not included) */
+.itinerary-item.is-optional-not-included {
+  opacity: 0.6;
+  border-left: 3px solid var(--accent-orange);
+}
+
+.itinerary-item.is-optional-not-included .item-totals {
+  text-decoration: line-through;
+}
+
+.optional-label-text {
+  font-style: italic;
+  color: var(--accent-orange);
+}
+
+.item-text .optional-label-text {
+  font-size: 0.9em;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+/* --- Add Alternative Modal Styles --- */
+#alternative-items-list-container {
+  margin-top: 1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-md);
+  max-height: 40vh;
+  overflow-y: auto;
+  background-color: var(--bg-light-gray);
+}
+
+.alternative-search-result-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.alternative-search-result-item:last-child {
+  border-bottom: none;
+}
+
+.alternative-search-result-item:hover {
+  background-color: #ebf8ff; /* A light blue hover */
+}
+
+.alternative-search-result-item h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  color: var(--text-dark-primary);
+}
+
+.alternative-search-result-item p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dark-secondary);
+}
+/* --- END OF NEW CODE --- */
