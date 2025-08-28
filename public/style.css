@@ -445,7 +445,7 @@ select {
   justify-content: space-between;
   align-items: center;
   padding: 15px 1.5rem;
-  max-width: 1400px;
+  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
   margin: 0 auto 10px auto;
   border-bottom: 1px solid var(--border-light);
 }
@@ -488,7 +488,7 @@ select {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
-  max-width: 1400px;
+  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
   margin-left: auto;
   margin-right: auto;
 }
@@ -529,7 +529,7 @@ select {
   gap: 2rem;
   padding: 0 1.5rem 1.5rem 1.5rem;
   align-items: flex-start;
-  max-width: 1400px;
+  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
   margin-left: auto;
   margin-right: auto;
   /* height: calc(100vh - var(--header-height) - 20px - 1.5rem); */
@@ -899,6 +899,11 @@ select {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.item-actions-placeholder {
+  display: flex; /* Use flexbox for alignment inside the placeholder */
+  align-items: center;
 }
 
 .item-text {
@@ -1509,25 +1514,43 @@ select {
   ); /* A subtle orange background for the whole item */
 }
 
+/* This styles the clickable warning message INSIDE the modal */
 .item-warning {
-  color: var(--accent-orange);
-  font-size: 0.8rem;
-  font-weight: 600;
-  margin-top: 4px;
-  padding: 4px 6px;
+  padding: 8px;
   border-radius: var(--border-radius-sm);
-  cursor: pointer; /* Indicates the text is clickable */
-  display: inline-block; /* Allows padding and hover effects to work well */
+  background-color: var(--accent-orange-hover);
+  color: var(--bg-light);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  display: block;
+  text-align: center;
   transition: background-color 0.2s ease;
 }
 
 .item-warning:hover {
+  background-color: var(--accent-orange);
+}
+
+/* This adds the orange border to the main item IN THE BUILDER */
+.itinerary-item.warning {
+  border-left: 3px solid var(--accent-orange);
+}
+
+/* .item-warning:hover {
   background-color: rgba(
     221,
     107,
     32,
     0.2
-  ); /* A slightly darker background on hover */
+  ); /* A slightly darker background on hover
+} */
+
+/* This rule adds the orange border to the main item container */
+.itinerary-item.warning {
+  border-left: 3px solid var(--accent-orange);
+  padding-left: calc(0.8rem - 3px); /* Adjust padding to keep alignment */
 }
 
 .itinerary-item.warning-focus {
@@ -1558,13 +1581,15 @@ select {
 }
 
 .item-continuation-prompt {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border-medium);
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.85rem;
+  /* The following properties that caused the extra row have been removed:
+     - margin-top
+     - padding-top
+     - border-top 
+  */
 }
 
 .item-continuation-prompt label {
@@ -1601,7 +1626,6 @@ select {
   font-weight: 500;
   border-radius: var(--border-radius-md);
   cursor: pointer;
-  margin-top: 8px;
   display: inline-block; /* Allows buttons to be on the same line */
   width: auto;
   transition: all 0.2s ease;
@@ -1806,4 +1830,115 @@ select {
   font-size: 0.85rem;
   color: var(--text-dark-secondary);
 }
-/* --- END OF NEW CODE --- */
+
+/* --- Item Details Modal Styles --- */
+.item-modal-section {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.item-modal-pricing-grid {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+.item-modal-pricing-grid label {
+  font-weight: 500;
+  text-align: right;
+  color: var(--text-dark-secondary);
+  font-size: 0.9rem;
+}
+.item-modal-pricing-grid .price-value {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+#item-modal-markup-input {
+  width: 80px;
+  padding: 0.4rem;
+}
+#item-modal-actions .form-group {
+  margin-bottom: 1rem;
+}
+
+/* --- Single-Line "At-a-Glance" Item View (DEFINITIVE GRID) --- */
+
+/* 1. Main item container: Now a GRID to lock columns in place */
+.itinerary-item {
+  display: grid;
+  /* COLUMNS: Details(fills all space) | Totals(auto-sized) */
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.8rem; /* Your requested padding is now applied */
+}
+
+/* 2. Details container: A nested GRID to lock its own elements into columns */
+.itinerary-item .item-details {
+  min-width: 0;
+  display: grid;
+  /* COLUMNS: Arrows | Title | Actions | Prompt */
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* 3. Order controls (arrows) */
+.item-order-controls {
+  display: flex;
+  flex-direction: row; /* Arrows side-by-side */
+}
+
+/* 4. Item Title */
+.itinerary-item .item-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* 5. Continuation Prompt */
+.item-continuation-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 6. Totals container (price and delete button) */
+.itinerary-item .item-totals {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.item-totals .total-item-selling {
+  white-space: nowrap;
+  margin-right: 1rem;
+}
+
+/* --- Arrow Styling (Restored to original) --- */
+.order-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-light-secondary);
+  padding: 0;
+  margin: 0;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  border-radius: var(--border-radius-sm);
+  box-shadow: none;
+}
+.order-btn:hover {
+  color: var(--text-light-primary);
+  background-color: var(--border-medium);
+}
+.order-btn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+  background-color: transparent;
+}

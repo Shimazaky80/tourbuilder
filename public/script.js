@@ -161,6 +161,19 @@ const alternativeItemsListContainer = document.getElementById(
   "alternative-items-list-container"
 );
 const primaryDayItemIdInput = document.getElementById("primary-day-item-id");
+const itemDetailsModal = document.getElementById("item-details-modal");
+const itemDetailsForm = document.getElementById("item-details-form");
+const itemModalTitle = document.getElementById("item-modal-title");
+const itemModalPricing = document.getElementById("item-modal-pricing");
+const itemModalDescription = document.getElementById("item-modal-description");
+const itemModalActions = document.getElementById("item-modal-actions");
+const editingItemInstanceIdInput = document.getElementById(
+  "editing-item-instance-id"
+);
+const replacementModal = document.getElementById("replacement-modal");
+const replacementOptionsContainer = document.getElementById(
+  "replacement-options-container"
+);
 
 // --- State Variables ---
 let currentUser = null;
@@ -764,29 +777,32 @@ const updateMetadataDisplay = () => {
 
 const saveItinerary = async (showAlert = true) => {
   // VALIDATION: Manually check for any occupancy warnings on the page before saving.
-  const allWarningElements = document.querySelectorAll(".item-warning");
-  let firstFoundWarning = null;
+  const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+  const itemsWithWarnings = [];
+  const allItems = daysContainer.querySelectorAll(".itinerary-item");
 
-  for (const warningElement of allWarningElements) {
-    if (warningElement.textContent.trim() !== "") {
-      firstFoundWarning = warningElement;
-      break; // Stop at the first warning found
+  allItems.forEach((itemEl) => {
+    const itemCategory = itemEl.dataset.itemType;
+    const maxOccupancy = parseInt(itemEl.dataset.maxOccupancy) || 0;
+    if (
+      itemCategory &&
+      ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
+      maxOccupancy > 0 &&
+      totalPax > maxOccupancy
+    ) {
+      itemsWithWarnings.push(itemEl);
     }
-  }
+  });
 
-  if (firstFoundWarning) {
+  if (itemsWithWarnings.length > 0 && showAlert) {
     alert(
       "Cannot save. Please resolve all occupancy warnings before continuing."
     );
-    firstFoundWarning.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Ensure the element is clearly visible after scrolling
-    firstFoundWarning
-      .closest(".itinerary-item")
-      ?.classList.add("warning-focus");
+    const firstOffendingItem = itemsWithWarnings[0];
+    firstOffendingItem.scrollIntoView({ behavior: "smooth", block: "center" });
+    firstOffendingItem.classList.add("warning-focus");
     setTimeout(() => {
-      firstFoundWarning
-        .closest(".itinerary-item")
-        ?.classList.remove("warning-focus");
+      firstOffendingItem.classList.remove("warning-focus");
     }, 2500);
     return; // Stop the save process
   }
@@ -1145,6 +1161,7 @@ function updateItemFinancialsDisplay(itemElement) {
     ? parseInt(itemElement.dataset.maxOccupancy)
     : null;
   const subCategory = itemElement.dataset.subCategory;
+  const itemCategory = itemElement.dataset.itemType;
   const serviceConfigs = JSON.parse(itemElement.dataset.serviceConfigs || "[]");
 
   const costPerBase = parseFloat(itemElement.dataset.costPrice) || 0;
@@ -1156,11 +1173,13 @@ function updateItemFinancialsDisplay(itemElement) {
   let effectiveMarkup;
   if (itemMarkup !== "" && itemMarkup !== undefined) {
     effectiveMarkup = parseFloat(itemMarkup);
-    itemMarkupInput.value = effectiveMarkup.toFixed(2);
+    if (itemMarkupInput) itemMarkupInput.value = effectiveMarkup.toFixed(2); // <-- ADD THIS CHECK
   } else {
     effectiveMarkup = parseFloat(currentMarkupPercentage);
-    itemMarkupInput.value = "";
-    itemMarkupInput.placeholder = effectiveMarkup.toFixed(2);
+    if (itemMarkupInput) {
+      itemMarkupInput.value = "";
+      itemMarkupInput.placeholder = effectiveMarkup.toFixed(2);
+    }
   }
 
   let sellingPricePerBase = parseFloat(itemElement.dataset.sellingPrice) || 0;
@@ -1183,35 +1202,24 @@ function updateItemFinancialsDisplay(itemElement) {
     totalSell = sellingPricePerBase * totalPax;
   }
 
-  const itemCategory = itemElement.dataset.itemType;
+  // in script.js, inside updateItemFinancialsDisplay...
 
-  // First, always remove any pre-existing warning to prevent duplicates
-  const existingWarning = itemElement.querySelector(".item-warning-message");
-  if (existingWarning) existingWarning.remove();
-  itemElement.classList.remove("warning");
-
+  // --- START OF NEW, CORRECTED CODE ---
+  // PERMANENT BORDER LOGIC: Check if this item has an occupancy issue.
   if (
     itemCategory &&
     ["Transfer", "Safari", "Activity", "Vehicle"].includes(itemCategory) &&
-    maxOccupancy
+    maxOccupancy > 0 &&
+    totalPax > maxOccupancy
   ) {
-    if (totalPax > maxOccupancy) {
-      // Find the correct parent element for the warning message
-      const pricingDiv = itemElement.querySelector(".item-pricing");
-      if (pricingDiv && pricingDiv.parentNode) {
-        const warningDiv = document.createElement("div");
-        // Use a more specific class to avoid conflicts with the placeholder
-        warningDiv.className = "item-warning-message item-warning";
-        warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
-
-        // Insert the warning message before the pricing div, within its direct parent
-        pricingDiv.parentNode.insertBefore(warningDiv, pricingDiv);
-        itemElement.classList.add("warning");
-      }
-    }
+    // If it does, add the .warning class for the orange border.
+    itemElement.classList.add("warning");
+  } else {
+    // Otherwise, ensure the warning class is not present.
+    itemElement.classList.remove("warning");
   }
+  // --- END OF NEW, CORRECTED CODE ---
 
-  // --- THIS IS THE DEFINITIVE FIX ---
   const configBtn = itemElement.querySelector(".configure-service-btn");
   if (subCategory === "Guide" || subCategory === "Driver") {
     itemElement.classList.add("is-service-item");
@@ -1219,7 +1227,6 @@ function updateItemFinancialsDisplay(itemElement) {
   } else {
     if (configBtn) configBtn.style.display = "none";
   }
-  // --- END OF FIX ---
 
   const costDisplaySpan = itemElement.querySelector(".item-cost-display");
   const sellingPriceValueSpan = itemElement.querySelector(
@@ -1228,11 +1235,14 @@ function updateItemFinancialsDisplay(itemElement) {
   const totalItemCostSpan = itemElement.querySelector(".total-item-cost");
   const totalItemSellingSpan = itemElement.querySelector(".total-item-selling");
 
-  const costPriceSpan = costDisplaySpan.querySelector(".editable-cost-price");
-  const costSuffixSpan = costDisplaySpan.querySelector(".cost-suffix");
-  if (costPriceSpan)
-    costPriceSpan.textContent = formatCurrency(costPerBase, currencyCode);
-  if (costSuffixSpan) costSuffixSpan.textContent = ` ${displayUnitText}`;
+  // These elements might not exist in the "at-a-glance" view, so we must check for them.
+  if (costDisplaySpan) {
+    const costPriceSpan = costDisplaySpan.querySelector(".editable-cost-price");
+    const costSuffixSpan = costDisplaySpan.querySelector(".cost-suffix");
+    if (costPriceSpan)
+      costPriceSpan.textContent = formatCurrency(costPerBase, currencyCode);
+    if (costSuffixSpan) costSuffixSpan.textContent = ` ${displayUnitText}`;
+  }
 
   if (sellingPriceValueSpan) {
     const perPersonSellEquivalent = totalPax > 0 ? totalSell / totalPax : 0;
@@ -1242,16 +1252,20 @@ function updateItemFinancialsDisplay(itemElement) {
     );
   }
 
-  if (totalItemCostSpan)
+  if (totalItemCostSpan) {
     totalItemCostSpan.textContent = `Total Cost: ${formatCurrency(
       totalCost,
       currencyCode
     )}`;
-  if (totalItemSellingSpan)
+  }
+
+  // This element DOES exist in the "at-a-glance" view, so it will always update.
+  if (totalItemSellingSpan) {
     totalItemSellingSpan.textContent = `Total Sell: ${formatCurrency(
       totalSell,
       currencyCode
     )}`;
+  }
 }
 
 const updateAllItemFinancialDisplays = () => {
@@ -1260,7 +1274,6 @@ const updateAllItemFinancialDisplays = () => {
     .forEach(updateItemFinancialsDisplay);
 };
 
-// --- START OF NEW, CORRECTED configureItineraryItem FUNCTION ---
 const configureItineraryItem = (itemElement, sourceData = {}) => {
   if (!itemElement) return;
 
@@ -1311,26 +1324,22 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
 
   itemElement.innerHTML = `
     <div class="item-details">
-      <div style="display: flex; align-items: flex-start;">
-        <div class="alternative-control-placeholder"></div>
-        <div style="flex-grow: 1;">
-          <span class="item-text">${displayText.replace(/</g, "<")}</span>
-          <div class="item-warning"></div>
-          <div class="item-pricing">
-            <span class="item-cost-display"> Cost: <span class="editable-cost-price" title="Double-click to edit cost price">$0.00</span> <span class="edit-icon" aria-hidden="true">✎</span> <span class="cost-suffix">pp</span> </span>
-            <span class="item-markup-container"> <input type="number" class="item-markup-input" min="0" step="0.01" title="Item-specific markup %" />% </span>
-            <span class="item-selling-display"> Sell: <span class="selling-price-value">$0.00</span> pp </span>
-          </div>
-          <div class="item-actions">
-            <button class="edit-description-btn" title="Edit custom description">📝 Edit Description</button>
-            <div class="optional-control-placeholder" style="display: inline-block;"></div>
-          </div>
-        </div>
+      <div class="item-order-controls">
+        <button class="order-btn up-btn" aria-label="Move item up">▲</button>
+        <button class="order-btn down-btn" aria-label="Move item down">▼</button>
       </div>
+      <span class="item-text">${displayText.replace(/</g, "&lt;")}</span>
+      
+      <!-- Placeholder for Configure Service, Set as Primary, etc. -->
+      <div class="item-actions-placeholder"></div>
+
+      <!-- Hidden placeholders for other functions to find -->
+      <div class="alternative-control-placeholder" style="display: none;"></div>
+      <div class="optional-control-placeholder" style="display: none;"></div>
+      <div class="item-warning" style="display: none;"></div>
     </div>
     <div class="item-totals">
-      <span class="total-item-cost">Total Cost: $0.00</span>
-      <span class="total-item-selling">Total Sell: $0.00</span>
+      <span class="total-item-selling"></span>
       <button class="delete-item-btn" title="Delete item">✕</button>
     </div>`;
 
@@ -1382,6 +1391,7 @@ const configureItineraryItem = (itemElement, sourceData = {}) => {
   itemElement.classList.remove("is-editing");
   itemElement.classList.remove("is-editing-price");
   updateItemFinancialsDisplay(itemElement);
+  updateAllItemOrderButtons();
 };
 
 const updateGrandTotal = () => {
@@ -1517,9 +1527,29 @@ const updateServiceDayHighlights = () => {
       configBtn.className = "configure-service-btn";
       configBtn.title = "Configure multi-day service options";
       configBtn.textContent = "⚙️ Configure Service";
-      firstServiceItem.querySelector(".item-actions").appendChild(configBtn);
+
+      // FIX: Append the button to the dedicated actions placeholder
+      firstServiceItem
+        .querySelector(".item-actions-placeholder")
+        .appendChild(configBtn);
     }
   }
+};
+
+const updateAllItemOrderButtons = () => {
+  daysContainer.querySelectorAll(".day-items-list").forEach((list) => {
+    const items = list.querySelectorAll(".itinerary-item");
+    items.forEach((item, index) => {
+      const upBtn = item.querySelector(".up-btn");
+      const downBtn = item.querySelector(".down-btn");
+      if (!upBtn || !downBtn) return;
+
+      // Enable/disable up button
+      upBtn.disabled = index === 0;
+      // Enable/disable down button
+      downBtn.disabled = index === items.length - 1;
+    });
+  });
 };
 
 const handleDragStart = (event) => {
@@ -1653,6 +1683,19 @@ const handleDrop = async (event) => {
       subCategory: currentlyDraggedElement.dataset.subCategory,
     };
 
+    // IMMEDIATE ALERT: Check occupancy right now, before any other logic runs.
+    const relevantCategories = ["Transfer", "Safari", "Activity", "Vehicle"];
+    if (itemData.itemType && relevantCategories.includes(itemData.itemType)) {
+      const maxOccupancy = parseInt(itemData.maxOccupancy) || 0;
+      const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+
+      if (maxOccupancy > 0 && totalPax > maxOccupancy) {
+        alert(
+          `Warning: The selected item has a maximum occupancy of ${maxOccupancy}, but there are ${totalPax} passengers.`
+        );
+      }
+    }
+
     elementToAdd = document.createElement("div");
 
     // Case 1: The dropped item is a Guide or Driver. This is a special case.
@@ -1686,7 +1729,8 @@ const handleDrop = async (event) => {
         <label>more day(s)</label>
         <button class="confirm-continuation-btn">Confirm</button>
       `;
-      elementToAdd.appendChild(promptDiv);
+      // Insert the prompt into the details container, right after the text
+      elementToAdd.querySelector(".item-details").appendChild(promptDiv);
 
       const confirmBtn = promptDiv.querySelector(".confirm-continuation-btn");
       confirmBtn.addEventListener(
@@ -1738,7 +1782,8 @@ const handleDrop = async (event) => {
         <label>more day(s)</label>
         <button class="confirm-continuation-btn">Confirm</button>
       `;
-      elementToAdd.appendChild(promptDiv);
+      // Insert the prompt into the details container, right after the text
+      elementToAdd.querySelector(".item-details").appendChild(promptDiv);
 
       const confirmBtn = promptDiv.querySelector(".confirm-continuation-btn");
       confirmBtn.addEventListener(
@@ -1799,7 +1844,8 @@ const handleDrop = async (event) => {
   // Final updates after any drop
   updateGrandTotal();
   updateServiceDayHighlights();
-  updateAccommodationGroups(); // Ensure groups are redrawn on re-ordering
+  updateAccommodationGroups();
+  updateAllItemOrderButtons();
   saveItinerary();
   currentlyDraggedElement = null;
 };
@@ -1950,6 +1996,32 @@ const handleNumPeopleChange = (event) => {
 };
 const handleDaysContainerClick = (event) => {
   const target = event.target;
+
+  if (target.classList.contains("order-btn")) {
+    const itemToMove = target.closest(".itinerary-item");
+    if (!itemToMove) return;
+
+    const list = itemToMove.parentNode;
+    const isUp = target.classList.contains("up-btn");
+
+    if (isUp) {
+      const previousItem = itemToMove.previousElementSibling;
+      if (previousItem) {
+        list.insertBefore(itemToMove, previousItem);
+      }
+    } else {
+      // It's the down button
+      const nextItem = itemToMove.nextElementSibling;
+      if (nextItem) {
+        list.insertBefore(nextItem, itemToMove);
+      }
+    }
+
+    // Update the visual state of all buttons in this list and save
+    updateAllItemOrderButtons();
+    saveItinerary(false); // Save silently
+    return;
+  }
 
   if (target.classList.contains("set-primary-btn")) {
     const newPrimaryItemEl = target.closest(".itinerary-item");
@@ -2132,64 +2204,75 @@ const handleDaysContainerClick = (event) => {
     updateAccommodationGroups();
     updateGrandTotal();
     updateServiceDayHighlights();
+    updateAllItemOrderButtons();
     saveItinerary();
     return;
   }
+};
 
-  if (target.classList.contains("item-warning")) {
-    const itemEl = target.closest(".itinerary-item");
-    if (!itemEl || itemEl.querySelector(".item-replacement-container")) return;
+const showVehicleReplacementOptions = (itemEl) => {
+  if (!itemEl || itemEl.querySelector(".item-replacement-container")) return;
 
-    const currentItemId = itemEl.dataset.libraryItemId;
-    const currentCurrency = itemEl.dataset.currencyCode;
-    const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+  const warningPlaceholder = itemEl.querySelector(".item-warning");
+  if (!warningPlaceholder) return;
 
-    const originalItem = allAvailableLibraryItems.find(
-      (item) => item.itemId === currentItemId
-    );
-    if (!originalItem) {
-      target.textContent = "Could not find original item data.";
-      return;
-    }
-    const supplierName = originalItem.supplierName;
+  const currentItemId = itemEl.dataset.libraryItemId;
+  const currentCurrency = itemEl.dataset.currencyCode;
+  const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
 
-    const replacementOptions = allAvailableLibraryItems.filter(
-      (item) =>
-        item.supplierName === supplierName &&
-        item.currencyCode === currentCurrency &&
-        (item.maxOccupancy === null || item.maxOccupancy >= totalPax) &&
-        item.itemId !== currentItemId
-    );
+  const originalItem = allAvailableLibraryItems.find(
+    (item) => item.itemId === currentItemId
+  );
+  if (!originalItem) {
+    warningPlaceholder.textContent = "Could not find original item data.";
+    return;
+  }
+  const supplierName = originalItem.supplierName;
 
-    if (replacementOptions.length > 0) {
-      const container = document.createElement("div");
-      container.className = "item-replacement-container";
-      container.innerHTML = `<label>Choose a suitable replacement:</label>`;
-      const select = document.createElement("select");
-      select.className = "item-replacement-select";
-      select.innerHTML = `<option value="">Select a vehicle...</option>`;
-      replacementOptions.forEach((opt) => {
-        select.innerHTML += `<option value="${opt.itemRateId}">${
-          opt.itemName
-        } (Max: ${opt.maxOccupancy || "N/A"}) - ${formatCurrency(
-          opt.cost,
-          opt.currencyCode
-        )}</option>`;
-      });
-      select.addEventListener("change", handleItemReplacement);
-      container.appendChild(select);
-      target.innerHTML = "";
-      target.appendChild(container);
-    } else {
-      target.textContent = "No suitable replacements found in this currency.";
-    }
+  const replacementOptions = allAvailableLibraryItems.filter(
+    (item) =>
+      item.supplierName === supplierName &&
+      item.currencyCode === currentCurrency &&
+      (item.maxOccupancy === null || item.maxOccupancy >= totalPax) &&
+      item.itemId !== currentItemId
+  );
+
+  if (replacementOptions.length > 0) {
+    const container = document.createElement("div");
+    container.className = "item-replacement-container";
+    container.innerHTML = `<label>Choose a suitable replacement:</label>`;
+    const select = document.createElement("select");
+    select.className = "item-replacement-select";
+    select.innerHTML = `<option value="">Select a vehicle...</option>`;
+    replacementOptions.forEach((opt) => {
+      select.innerHTML += `<option value="${opt.itemRateId}">${
+        opt.itemName
+      } (Max: ${opt.maxOccupancy || "N/A"}) - ${formatCurrency(
+        opt.cost,
+        opt.currencyCode
+      )}</option>`;
+    });
+    select.addEventListener("change", handleItemReplacement);
+    container.appendChild(select);
+
+    warningPlaceholder.innerHTML = "";
+    warningPlaceholder.appendChild(container);
+    warningPlaceholder.style.display = "block";
+  } else {
+    warningPlaceholder.textContent =
+      "No suitable replacements found in this currency.";
   }
 };
 
 const handleItemReplacement = async (event) => {
   const selectElement = event.target;
   const selectedOption = selectElement.options[selectElement.selectedIndex];
-  const oldItemElement = selectElement.closest(".itinerary-item");
+
+  // CRITICAL FIX: Find the item being edited using the ID stored from the details modal
+  const instanceId = editingItemInstanceIdInput.value;
+  const oldItemElement = document.querySelector(
+    `.itinerary-item[data-instance-id="${instanceId}"]`
+  );
 
   if (!selectedOption.value || !oldItemElement) return;
 
@@ -2200,33 +2283,200 @@ const handleItemReplacement = async (event) => {
     );
     if (!newItemData) throw new Error("Could not find replacement item data.");
 
-    // Create a new element with the replacement data
     const newItemElement = document.createElement("div");
+    // Configure the new item with all the correct data
     configureItineraryItem(newItemElement, {
+      ...newItemData,
       price: newItemData.cost,
       displayText: `${newItemData.supplierName} - ${newItemData.itemName}`,
-      itemId: newItemData.itemId,
-      itemRateId: newItemData.itemRateId,
       itemType: newItemData.category,
-      currencyCode: newItemData.currencyCode,
-      pricingModel: newItemData.pricingModel,
-      maxOccupancy: newItemData.maxOccupancy,
     });
 
     // Replace the old item with the new one in the DOM
     oldItemElement.parentNode.replaceChild(newItemElement, oldItemElement);
 
-    // THIS IS THE FIX: Re-run all display logic on the entire page
+    // Update all UI and save the itinerary
+    // CRITICAL: Update ALL display logic to correctly remove the .warning class
     updateAllItemFinancialDisplays();
-
+    updateAccommodationGroups();
     updateGrandTotal();
-    await saveItinerary(false);
+    updateAllItemOrderButtons();
+    updateServiceDayHighlights();
+
+    // Now, save the itinerary. The validation in saveItinerary will now pass.
+    saveItinerary(false);
   } catch (error) {
     console.error("Error replacing item:", error);
     alert(`Could not replace item: ${error.message}`);
   } finally {
     hideLoadingSpinner();
   }
+};
+
+const openVehicleReplacementModal = (itemEl) => {
+  if (!itemEl) return;
+
+  const currentItemId = itemEl.dataset.libraryItemId;
+  const currentCurrency = itemEl.dataset.currencyCode;
+  const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+
+  const originalItem = allAvailableLibraryItems.find(
+    (item) => item.itemId === currentItemId
+  );
+  if (!originalItem) {
+    alert("Could not find original item data.");
+    return;
+  }
+  const supplierName = originalItem.supplierName;
+
+  const replacementOptions = allAvailableLibraryItems.filter(
+    (item) =>
+      item.supplierName === supplierName &&
+      item.currencyCode === currentCurrency &&
+      (item.maxOccupancy === null || item.maxOccupancy >= totalPax) &&
+      item.itemId !== currentItemId
+  );
+
+  replacementOptionsContainer.innerHTML = ""; // Clear old options
+
+  if (replacementOptions.length > 0) {
+    const select = document.createElement("select");
+    select.className = "item-replacement-select";
+    select.innerHTML = `<option value="">Select a new vehicle...</option>`;
+    replacementOptions.forEach((opt) => {
+      select.innerHTML += `<option value="${opt.itemRateId}">${
+        opt.itemName
+      } (Max: ${opt.maxOccupancy || "N/A"}) - ${formatCurrency(
+        opt.cost,
+        opt.currencyCode
+      )}</option>`;
+    });
+
+    // When the user chooses a new vehicle, call the existing handleItemReplacement function
+    select.addEventListener("change", (event) => {
+      handleItemReplacement(event);
+      closeModal(replacementModal); // Close this modal after selection
+    });
+
+    replacementOptionsContainer.appendChild(select);
+  } else {
+    replacementOptionsContainer.innerHTML =
+      "<p>No suitable replacement vehicles found in this currency.</p>";
+  }
+
+  openModal(replacementModal);
+};
+
+const openItemDetailModal = (itemElement) => {
+  const instanceId = itemElement.dataset.instanceId;
+  editingItemInstanceIdInput.value = instanceId;
+
+  // Get all data from the element's dataset
+  const displayText = itemElement.dataset.displayText;
+  const costPrice = parseFloat(itemElement.dataset.costPrice);
+  const sellingPrice = parseFloat(itemElement.dataset.sellingPrice);
+  const itemMarkup = itemElement.dataset.itemMarkup;
+  const currencyCode = itemElement.dataset.currencyCode;
+  const description = itemElement.dataset.customDescription || "";
+  const isIncluded = itemElement.dataset.isIncluded === "true";
+  const itemCategory = itemElement.dataset.itemType;
+  const maxOccupancy = parseInt(itemElement.dataset.maxOccupancy) || 0;
+  const totalPax = (paxAdults || 0) + (paxChildren || 0) || 1;
+
+  // POINT 2 & 3: Populate the Modal, including the warning text if needed
+  itemModalTitle.textContent = displayText;
+  itemModalDescription.value = description;
+
+  itemModalPricing.innerHTML = `
+    <div class="item-modal-pricing-grid">
+      <label>Cost Price:</label>
+      <span class="price-value">${formatCurrency(
+        costPrice,
+        currencyCode
+      )}</span>
+      <label for="item-modal-markup-input">Markup (%):</label>
+      <input type="number" id="item-modal-markup-input" class="item-markup-input" value="${itemMarkup}" placeholder="${currentMarkupPercentage.toFixed(
+    2
+  )}" min="0" step="0.01" />
+      <label>Selling Price:</label>
+      <span class="price-value">${formatCurrency(
+        sellingPrice,
+        currencyCode
+      )}</span>
+    </div>
+  `;
+
+  // If the item has the .warning class, show the clickable message in the modal
+  if (itemElement.classList.contains("warning")) {
+    const warningDiv = document.createElement("div");
+    warningDiv.className = "item-warning"; // The class that makes it clickable
+    warningDiv.textContent = `Warning: Occupancy (${maxOccupancy}) exceeded for ${totalPax} people. Click to fix.`;
+    itemModalPricing.prepend(warningDiv);
+  }
+
+  // Populate Actions Section (Set as Primary / Include in Total)
+  itemModalActions.innerHTML = "";
+  if (
+    itemCategory.toLowerCase() === "room" &&
+    itemElement.closest(".accommodation-group")
+  ) {
+    const isPrimary = isIncluded;
+    const setPrimaryBtn = document.createElement("button");
+    setPrimaryBtn.className = "set-primary-btn";
+    setPrimaryBtn.textContent = "Set as Primary";
+    setPrimaryBtn.type = "button";
+    setPrimaryBtn.disabled = isPrimary;
+    itemModalActions.appendChild(setPrimaryBtn);
+  } else if (
+    ["Excursion", "Meal", "Safari", "Activity", "Transfer", "Vehicle"].includes(
+      itemCategory
+    )
+  ) {
+    const optionalControls = document.createElement("div");
+    optionalControls.className = "form-group";
+    optionalControls.innerHTML = `
+        <span class="optional-controls">
+            <input type="checkbox" id="item-modal-optional-checkbox" ${
+              isIncluded ? "checked" : ""
+            }>
+            <label for="item-modal-optional-checkbox">Include in Total</label>
+        </span>
+    `;
+    itemModalActions.appendChild(optionalControls);
+  }
+
+  openModal(itemDetailsModal);
+};
+
+const handleSaveItemDetails = (event) => {
+  event.preventDefault();
+  const instanceId = editingItemInstanceIdInput.value;
+  const itemElement = document.querySelector(
+    `.itinerary-item[data-instance-id="${instanceId}"]`
+  );
+  if (!itemElement) return;
+
+  const newMarkup = document.getElementById("item-modal-markup-input").value;
+  const newDescription = itemModalDescription.value;
+  const optionalCheckbox = document.getElementById(
+    "item-modal-optional-checkbox"
+  );
+
+  itemElement.dataset.itemMarkup = newMarkup;
+  itemElement.dataset.sellingPriceOverridden = "false";
+  itemElement.dataset.customDescription = newDescription;
+
+  if (optionalCheckbox) {
+    const isIncluded = optionalCheckbox.checked;
+    itemElement.dataset.isIncluded = isIncluded;
+  }
+
+  updateAllItemFinancialDisplays();
+  updateAccommodationGroups();
+  updateGrandTotal();
+  saveItinerary();
+
+  closeModal(itemDetailsModal);
 };
 
 const openDescriptionEditor = async (itemElement) => {
@@ -3421,6 +3671,48 @@ const attachBuilderListeners = () => {
   sidebarCurrencySelect.addEventListener("change", () =>
     fetchAndDisplayAvailableItems(itemSearchInput.value)
   );
+
+  sidebarCurrencySelect.addEventListener("change", () =>
+    fetchAndDisplayAvailableItems(itemSearchInput.value)
+  );
+
+  // LISTENERS FOR THE NEW ITEM DETAILS MODAL
+  itemDetailsModal
+    .querySelector(".close-modal-btn")
+    .addEventListener("click", () => closeModal(itemDetailsModal));
+  itemDetailsModal
+    .querySelector(".cancel-modal-btn")
+    .addEventListener("click", () => closeModal(itemDetailsModal));
+  itemDetailsForm.addEventListener("submit", handleSaveItemDetails);
+
+  itemDetailsModal.addEventListener("click", (event) => {
+    if (event.target.classList.contains("item-warning")) {
+      const instanceId = editingItemInstanceIdInput.value;
+      const itemElement = document.querySelector(
+        `.itinerary-item[data-instance-id="${instanceId}"]`
+      );
+      if (itemElement) {
+        closeModal(itemDetailsModal); // Close the details modal first
+        // Then, open the new, dedicated replacement modal
+        openVehicleReplacementModal(itemElement);
+      }
+    }
+  });
+
+  // POINT 2: This listener opens the modal when a user clicks on an item
+  daysContainer.addEventListener("click", (event) => {
+    if (event.target.closest("button")) {
+      return; // Ignore clicks on buttons (delete, arrows, etc.)
+    }
+    const itemElement = event.target.closest(".itinerary-item");
+    if (itemElement) {
+      openItemDetailModal(itemElement);
+    }
+  });
+
+  // ADD THESE NEW LISTENERS (This is your existing line)
+  descriptionEditorModal.querySelector(".close-modal-btn");
+
   // ADD THESE NEW LISTENERS
   descriptionEditorModal
     .querySelector(".close-modal-btn")
@@ -3454,6 +3746,14 @@ const attachBuilderListeners = () => {
   addAlternativeModal
     .querySelector(".cancel-modal-btn")
     .addEventListener("click", () => closeModal(addAlternativeModal));
+
+  // ADD LISTENERS FOR THE REPLACEMENT MODAL
+  replacementModal
+    .querySelector(".close-modal-btn")
+    .addEventListener("click", () => closeModal(replacementModal));
+  replacementModal
+    .querySelector(".cancel-modal-btn")
+    .addEventListener("click", () => closeModal(replacementModal));
 
   // ADD THESE TWO LINES FOR THE MODAL DATE PICKERS
   travelStartDateInput.addEventListener("change", handleModalDateChange);

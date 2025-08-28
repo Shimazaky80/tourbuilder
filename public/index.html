@@ -521,6 +521,52 @@
       </div>
     </div>
 
+    <!-- ===== Modal for Editing Item Details ===== -->
+    <div class="modal-overlay" id="item-details-modal" style="display: none">
+      <div class="modal-content">
+        <button class="close-modal-btn" aria-label="Close">×</button>
+        <h2 id="item-modal-title">Item Details</h2>
+        <form id="item-details-form">
+          <!-- Pricing Section -->
+          <div id="item-modal-pricing" class="item-modal-section"></div>
+
+          <!-- Description Section -->
+          <div class="form-group item-modal-section">
+            <label>Custom Description</label>
+            <textarea
+              id="item-modal-description"
+              rows="6"
+              placeholder="Enter notes, inclusions, or a custom description for the client document..."
+            ></textarea>
+          </div>
+
+          <!-- Actions Section -->
+          <div id="item-modal-actions" class="item-modal-section"></div>
+
+          <input type="hidden" id="editing-item-instance-id" />
+          <div class="form-actions">
+            <button type="button" class="cancel-modal-btn">Cancel</button>
+            <button type="submit" class="save-item-details-btn">
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="replacement-modal" style="display: none">
+      <div class="modal-content">
+        <button class="close-modal-btn" aria-label="Close">×</button>
+        <h2 id="replacement-modal-title">Choose a Replacement Vehicle</h2>
+        <div id="replacement-options-container" class="form-group">
+          <!-- Dropdown will be built by JS here -->
+        </div>
+        <div class="form-actions">
+          <button type="button" class="cancel-modal-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>
