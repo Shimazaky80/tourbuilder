@@ -444,8 +444,9 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 1.5rem;
-  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
+  padding: 15px 2rem;
+  max-width: 100%; /* <--- CHANGE THIS from 1400px */
+  box-sizing: border-box;
   margin: 0 auto 10px auto;
   border-bottom: 1px solid var(--border-light);
 }
@@ -483,12 +484,13 @@ select {
 }
 
 .action-buttons {
-  padding: 0 1.5rem;
+  padding: 0 2rem;
   margin-bottom: 1.5rem;
   display: flex;
   gap: 0.75rem;
+  box-sizing: border-box;
   flex-wrap: wrap;
-  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
+  max-width: 100%; /* <--- CHANGE THIS from 1400px */
   margin-left: auto;
   margin-right: auto;
 }
@@ -527,9 +529,10 @@ select {
 .app-container {
   display: flex;
   gap: 2rem;
-  padding: 0 1.5rem 1.5rem 1.5rem;
+  padding: 0 2rem 2rem 2rem;
+  box-sizing: border-box;
   align-items: flex-start;
-  max-width: 1600px; /* <--- CHANGE THIS from 1400px */
+  max-width: 100%; /* <--- CHANGE THIS from 1400px */
   margin-left: auto;
   margin-right: auto;
   /* height: calc(100vh - var(--header-height) - 20px - 1.5rem); */
@@ -650,13 +653,19 @@ select {
 }
 
 .itinerary-builder {
-  flex-grow: 1;
+  flex: 1; /* This is the modern equivalent of flex-grow: 1 */
+  min-width: 0; /* Important for flexbox children */
   background-color: var(--bg-dark);
   color: var(--text-light-primary);
   padding: 1.5rem;
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
   min-height: 500px;
+}
+
+#totals-panel {
+  width: 280px; /* Give the new sidebar a fixed width */
+  flex-shrink: 0; /* Prevent it from shrinking */
 }
 
 .itinerary-header {
@@ -1043,13 +1052,20 @@ select {
   border-radius: 2px;
 }
 
+/* Style the moved totals container */
 .grand-total-container {
-  margin-top: 2rem;
+  margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-medium);
-  text-align: right;
-  font-size: 1.25rem;
-  color: var(--text-light-primary);
+  border-top: 1px solid var(--border-light);
+  text-align: left; /* Change alignment for the sidebar view */
+  font-size: 1rem;
+  color: var(--text-dark-primary); /* Use dark text on light background */
+}
+
+.grand-total-container > div {
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
 }
 
 #grand-total-value {
