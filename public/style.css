@@ -31,6 +31,7 @@
   /* Define sidebar width as a variable */
   --header-height: 60px;
   /* Approximate height of your .page-header, adjust if needed */
+  --actions-height: 50px;
 }
 
 /* --- General Styles --- */
@@ -444,11 +445,18 @@ select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 2rem;
-  max-width: 100%; /* <--- CHANGE THIS from 1400px */
-  box-sizing: border-box;
-  margin: 0 auto 10px auto;
+  padding: 0 2rem; /* Adjusted padding */
+  max-width: 100%;
+  height: var(--header-height); /* Use the variable */
+  margin: 0 auto;
   border-bottom: 1px solid var(--border-light);
+  box-sizing: border-box;
+
+  /* Sticky Logic */
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-light); /* Give it a solid background */
+  z-index: 998; /* Ensure it stays on top */
 }
 
 .page-header h1#main-app-title {
@@ -484,15 +492,23 @@ select {
 }
 
 .action-buttons {
-  padding: 0 2rem;
-  margin-bottom: 1.5rem;
+  padding: 0.5rem 2rem; /* Add vertical padding */
+  height: auto; /* Let height be determined by content + padding */
   display: flex;
+  align-items: center;
   gap: 0.75rem;
-  box-sizing: border-box;
   flex-wrap: wrap;
-  max-width: 100%; /* <--- CHANGE THIS from 1400px */
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border-light); /* Use border-top for separation */
+  border-bottom: 1px solid var(--border-light); /* Add bottom border as well */
+
+  /* Sticky Logic */
+  position: sticky;
+  top: var(--header-height);
+  background-color: var(--bg-light);
+  z-index: 998;
 }
 
 .action-buttons button {
@@ -530,15 +546,12 @@ select {
   display: flex;
   gap: 2rem;
   padding: 0 2rem 2rem 2rem;
-  box-sizing: border-box;
   align-items: flex-start;
-  max-width: 100%; /* <--- CHANGE THIS from 1400px */
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
-  /* height: calc(100vh - var(--header-height) - 20px - 1.5rem); */
-  /* Adjust based on total header/padding height */
-  /* overflow: hidden; */
-  /* Parent shouldn't scroll the whole page if sidebar is fixed */
+  box-sizing: border-box;
+  margin-top: 1.5rem;
 }
 
 /* --- Sidebar (Available Items) --- */
@@ -550,17 +563,14 @@ select {
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-light);
-  /* --- Fixed Sidebar Logic --- */
+
+  /* --- Sticky Sidebar Logic --- */
   position: sticky;
-  /* Makes it stick */
-  top: calc(var(--header-height) + 20px + 1.5rem);
-  /* Offset by header, top margin, and its own padding-top to stick below header*/
-  /* Adjust 'top' value precisely based on your header and action-buttons height */
-  height: calc(100vh - var(--header-height) - 20px - 1.5rem - 1.5rem - 20px);
-  /* Max height calculation, adjust as needed */
-  /* Viewport height - header - app-container top padding - sidebar own padding - some bottom buffer */
+  /* Stick below BOTH the header and the action buttons */
+  top: calc(var(--header-height) + var(--actions-height));
+  /* Adjust height to account for sticky elements */
+  height: calc(100vh - var(--header-height) - var(--actions-height) - 3rem);
   overflow-y: auto;
-  /* Allow internal scrolling for the sidebar content */
 }
 
 /* --- Sidebar (Available Items) --- */
@@ -684,10 +694,19 @@ select {
   font-weight: 600;
 }
 
-.itinerary-controls {
+.itinerary-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-medium);
+
+  /* --- Sticky Itinerary Header Logic --- */
+  position: sticky;
+  top: calc(var(--header-height) + var(--actions-height));
+  background-color: var(--bg-dark); /* Match the builder background */
+  z-index: 997; /* Below the main headers but above the content */
 }
 
 .itinerary-controls label {
