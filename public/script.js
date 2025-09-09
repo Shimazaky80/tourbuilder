@@ -1075,6 +1075,7 @@ const loadItinerary = async (itineraryDbId) => {
     updateMetadataDisplay();
     updateServiceDayHighlights();
     updateAccommodationGroups();
+    updateContinuationButtons(); // Ensure continuation buttons are updated
     showPage(mainAppWrapper);
     if (!builderListenersAttached) attachBuilderListeners();
 
@@ -1552,6 +1553,79 @@ const updateAllItemOrderButtons = () => {
   });
 };
 
+const updateContinuationButtons = () => {
+  // First, remove any existing extend buttons to prevent duplicates
+  daysContainer
+    .querySelectorAll(".extend-stay-btn")
+    .forEach((btn) => btn.remove());
+
+  const allItems = Array.from(
+    daysContainer.querySelectorAll(".itinerary-item")
+  );
+  const itemRuns = {};
+
+  // Group all items by their library ID
+  allItems.forEach((itemEl, index) => {
+    const libId = itemEl.dataset.libraryItemId;
+    if (!libId) return;
+    if (!itemRuns[libId]) {
+      itemRuns[libId] = [];
+    }
+    const dayNum = parseInt(itemEl.closest(".day").dataset.dayNumber);
+    itemRuns[libId].push({
+      element: itemEl,
+      day: dayNum,
+      originalIndex: index,
+    });
+  });
+
+  // For each group, find contiguous runs
+  for (const libId in itemRuns) {
+    const items = itemRuns[libId].sort((a, b) => a.day - b.day);
+    if (items.length === 0) continue;
+
+    let currentRun = [items[0]];
+    for (let i = 1; i < items.length; i++) {
+      // A run is contiguous if the day number is sequential
+      if (items[i].day === items[i - 1].day + 1) {
+        currentRun.push(items[i]);
+      } else {
+        // The run broke, process the last one
+        addExtendButtonToLastItem(currentRun);
+        currentRun = [items[i]]; // Start a new run
+      }
+    }
+    // Process the very last run
+    addExtendButtonToLastItem(currentRun);
+  }
+};
+
+const addExtendButtonToLastItem = (run) => {
+  if (run.length === 0) return;
+
+  const lastItemInRun = run[run.length - 1].element;
+  const itemCategory = lastItemInRun.dataset.itemType || "";
+
+  // IMPORTANT: Only add the "Extend Stay" button for Accommodation ('Room') items.
+  if (itemCategory.toLowerCase() !== "room") {
+    return;
+  }
+
+  // Check if there is a next day to extend to
+  const nextDayEl = lastItemInRun.closest(".day").nextElementSibling;
+  if (nextDayEl && nextDayEl.classList.contains("day")) {
+    const extendBtn = document.createElement("button");
+    extendBtn.className = "extend-stay-btn";
+    extendBtn.textContent = "Extend Stay";
+    extendBtn.title = "Add this item to the next day";
+
+    // Add the button to the actions placeholder
+    lastItemInRun
+      .querySelector(".item-actions-placeholder")
+      .appendChild(extendBtn);
+  }
+};
+
 const handleDragStart = (event) => {
   if (
     event.target.closest(".delete-item-btn") ||
@@ -1760,6 +1834,7 @@ const handleDrop = async (event) => {
 
           // CRITICAL: Call the UI updates immediately after placing all clones.
           updateAccommodationGroups();
+          updateContinuationButtons(); // Ensure continuation buttons are updated
           updateGrandTotal();
           saveItinerary(false);
         },
@@ -1846,6 +1921,7 @@ const handleDrop = async (event) => {
   updateServiceDayHighlights();
   updateAccommodationGroups();
   updateAllItemOrderButtons();
+  updateContinuationButtons(); // NEW: Ensure continuation buttons are updated
   saveItinerary();
   currentlyDraggedElement = null;
 };
@@ -1997,6 +2073,32 @@ const handleNumPeopleChange = (event) => {
 const handleDaysContainerClick = (event) => {
   const target = event.target;
 
+  if (target.classList.contains("extend-stay-btn")) {
+    const currentItem = target.closest(".itinerary-item");
+    const currentDay = currentItem.closest(".day");
+    const nextDay = currentDay.nextElementSibling;
+
+    if (nextDay && nextDay.classList.contains("day")) {
+      const nextDayDropZone = nextDay.querySelector(".day-items-list");
+      const clonedItem = currentItem.cloneNode(true);
+
+      // Clean up the clone: remove the button and give it a new ID
+      clonedItem.querySelector(".extend-stay-btn")?.remove();
+      clonedItem.dataset.instanceId = `inst-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 5)}`;
+
+      nextDayDropZone.appendChild(clonedItem);
+
+      // Update all UI elements and save
+      updateContinuationButtons(); // This will move the button to the new last item
+      updateAllItemOrderButtons();
+      updateContinuationButtons(); // Ensure continuation buttons are updated
+      saveItinerary(false);
+    }
+    return;
+  }
+
   if (target.classList.contains("order-btn")) {
     const itemToMove = target.closest(".itinerary-item");
     if (!itemToMove) return;
@@ -2019,6 +2121,7 @@ const handleDaysContainerClick = (event) => {
 
     // Update the visual state of all buttons in this list and save
     updateAllItemOrderButtons();
+    updateContinuationButtons(); // Ensure continuation buttons are updated
     saveItinerary(false); // Save silently
     return;
   }

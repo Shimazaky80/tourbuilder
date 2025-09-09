@@ -2046,3 +2046,23 @@ select {
   cursor: not-allowed;
   background-color: transparent;
 }
+
+/* --- Extend Item Button Styles --- */
+.extend-stay-btn {
+  background-color: transparent;
+  border: 1px dashed var(--text-light-secondary);
+  color: var(--text-light-secondary);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--border-radius-sm);
+  margin-left: 10px;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.extend-stay-btn:hover {
+  background-color: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #fff;
+}
