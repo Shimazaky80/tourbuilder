@@ -338,71 +338,88 @@
               <button id="undo-btn" disabled>Undo</button>
             </div>
           </div>
-          <div class="itinerary-metadata-display">
-            <div class="meta-item">
-              <label>Travel Dates:</label>
-              <div class="meta-value date-edit-group">
-                <input
-                  type="date"
-                  id="display-start-date-input"
-                  aria-label="Edit start date"
-                /><span> to </span
-                ><input
-                  type="date"
-                  id="display-end-date-input"
-                  aria-label="Edit end date"
-                />
-              </div>
-            </div>
-            <div class="meta-item">
-              <label>Client:</label
-              ><span class="meta-value" id="display-client-name">N/A</span>
-            </div>
-            <div class="meta-item">
-              <label>Contact:</label
-              ><span
-                class="meta-value editable"
-                id="display-client-contact"
-                title="Click to edit contact info (TODO)"
-                >N/A</span
-              >
-            </div>
-            <div class="meta-item">
-              <label>Client Type:</label
-              ><span class="meta-value" id="display-client-type">N/A</span>
-            </div>
-            <div
-              class="meta-item"
-              id="display-b2b-client-name-container"
-              style="display: none"
+          <div class="css-accordion">
+            <input
+              type="checkbox"
+              id="accordion-toggle"
+              class="accordion-toggle-input"
+            />
+            <label for="accordion-toggle" class="accordion-title"
+              >Show Travel Details</label
             >
-              <label>B2B Client:</label
-              ><span class="meta-value" id="display-b2b-client-name">N/A</span>
-            </div>
-            <div class="meta-item">
-              <label>Creator:</label
-              ><span class="meta-value" id="display-creator">N/A</span>
-            </div>
-            <div class="meta-item">
-              <label>ID:</label
-              ><span class="meta-value" id="display-unique-id">N/A</span>
-            </div>
-            <div class="meta-item">
-              <label>Status:</label>
-              <div class="meta-value status-group">
-                <span id="status-badge" class="status-badge status-quotation"
-                  >Quotation</span
+            <div class="accordion-content">
+              <div class="itinerary-metadata-display">
+                <div class="meta-item">
+                  <label>Travel Dates:</label>
+                  <div class="meta-value date-edit-group">
+                    <input
+                      type="date"
+                      id="display-start-date-input"
+                      aria-label="Edit start date"
+                    />
+                    <span> to </span>
+                    <input
+                      type="date"
+                      id="display-end-date-input"
+                      aria-label="Edit end date"
+                    />
+                  </div>
+                </div>
+                <div class="meta-item">
+                  <label>Client:</label>
+                  <span class="meta-value" id="display-client-name">N/A</span>
+                </div>
+                <div class="meta-item">
+                  <label>Contact:</label>
+                  <span
+                    class="meta-value editable"
+                    id="display-client-contact"
+                    title="Click to edit contact info (TODO)"
+                    >N/A</span
+                  >
+                </div>
+                <div class="meta-item">
+                  <label>Client Type:</label>
+                  <span class="meta-value" id="display-client-type">N/A</span>
+                </div>
+                <div
+                  class="meta-item"
+                  id="display-b2b-client-name-container"
+                  style="display: none"
                 >
-                <select id="status-selector">
-                  <option value="quotation">Quotation</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  <label>B2B Client:</label>
+                  <span class="meta-value" id="display-b2b-client-name"
+                    >N/A</span
+                  >
+                </div>
+                <div class="meta-item">
+                  <label>Creator:</label>
+                  <span class="meta-value" id="display-creator">N/A</span>
+                </div>
+                <div class="meta-item">
+                  <label>ID:</label>
+                  <span class="meta-value" id="display-unique-id">N/A</span>
+                </div>
+                <div class="meta-item">
+                  <label>Status:</label>
+                  <div class="meta-value status-group">
+                    <span
+                      id="status-badge"
+                      class="status-badge status-quotation"
+                      >Quotation</span
+                    >
+                    <select id="status-selector">
+                      <option value="quotation">Quotation</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="meta-item">
+                  <label>Created:</label>
+                  <span class="meta-value" id="display-creation-date">N/A</span>
+                </div>
               </div>
-            </div>
-            <div class="meta-item">
-              <label>Created:</label
-              ><span class="meta-value" id="display-creation-date">N/A</span>
             </div>
           </div>
 

@@ -1866,6 +1866,75 @@ select {
   color: var(--text-dark-secondary);
 }
 
+/* --- Pure CSS Accordion for Travel Details --- */
+.css-accordion {
+  margin-bottom: 1.5rem;
+}
+
+.accordion-toggle-input {
+  display: none; /* Hide the actual checkbox */
+}
+
+.accordion-title {
+  display: block;
+  padding: 0.6rem 0.6rem 0.6rem 2.5rem; /* Space for the icon */
+  background: var(--bg-medium-dark);
+  color: var(--text-light-primary);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.3s ease;
+  font-weight: 600;
+}
+
+.accordion-title:hover {
+  background-color: #4a5568; /* A slightly lighter shade on hover */
+}
+
+/* The '+' icon */
+.accordion-title::before {
+  content: "+";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2.5rem;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  background-color: rgba(0, 0, 0, 0.15);
+  border-right: 1px solid var(--border-medium);
+  transition: transform 0.3s ease;
+}
+
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease-in-out;
+  /* Reset the original styles that are now inside this container */
+  background-color: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* This is the core of the pure CSS toggle */
+.accordion-toggle-input:checked + .accordion-title {
+  background-color: var(--accent-green); /* Change color when open */
+  color: var(--bg-dark);
+}
+
+.accordion-toggle-input:checked + .accordion-title::before {
+  content: "−"; /* Change to a minus sign when open */
+  transform: rotate(180deg);
+  color: var(--bg-dark);
+}
+
+.accordion-toggle-input:checked ~ .accordion-content {
+  max-height: 500px; /* Animate to this height when open */
+  padding-top: 1.5rem; /* Add space when it opens */
+}
+
 /* --- Item Details Modal Styles --- */
 .item-modal-section {
   padding-bottom: 1rem;
