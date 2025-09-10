@@ -2971,27 +2971,35 @@ const updateAccommodationGroups = () => {
     // Add badges and buttons to each item in the group
     groupWrapper.querySelectorAll(".itinerary-item").forEach((itemEl) => {
       // Clear any old controls first
-      const existingBadge = itemEl.querySelector(".primary-badge");
-      if (existingBadge) existingBadge.remove();
-      const existingBtn = itemEl.querySelector(".set-primary-btn");
-      if (existingBtn) existingBtn.remove();
+      itemEl.querySelector(".primary-badge")?.remove();
+      itemEl.querySelector(".set-primary-btn")?.remove();
 
+      // Find the necessary placeholders
       const itemText = itemEl.querySelector(".item-text");
-      // Use instanceId for a reliable comparison, as dbId may not exist yet on new items
+      const actionsPlaceholder = itemEl.querySelector(
+        ".item-actions-placeholder"
+      );
+
+      // Use instanceId for a reliable comparison
       if (itemEl.dataset.instanceId === primaryItem.dataset.instanceId) {
         // This is the primary
-        const badge = document.createElement("span");
-        badge.className = "primary-badge";
-        badge.textContent = "⭐ Primary";
-        itemText.appendChild(badge);
+        if (itemText) {
+          // CRITICAL: Check if the element exists
+          const badge = document.createElement("span");
+          badge.className = "primary-badge";
+          badge.textContent = "⭐ Primary";
+          itemText.appendChild(badge);
+        }
         itemEl.classList.remove("is-optional-not-included");
       } else {
         // This is an alternative
-        const actionsDiv = itemEl.querySelector(".item-actions");
-        const setPrimaryBtn = document.createElement("button");
-        setPrimaryBtn.className = "set-primary-btn";
-        setPrimaryBtn.textContent = "Set as Primary";
-        actionsDiv.appendChild(setPrimaryBtn);
+        if (actionsPlaceholder) {
+          // CRITICAL: Check if the element exists
+          const setPrimaryBtn = document.createElement("button");
+          setPrimaryBtn.className = "set-primary-btn";
+          setPrimaryBtn.textContent = "Set as Primary";
+          actionsPlaceholder.appendChild(setPrimaryBtn);
+        }
         itemEl.classList.add("is-optional-not-included");
       }
     });
