@@ -3804,12 +3804,15 @@ const attachBuilderListeners = () => {
 
   // POINT 2: This listener opens the modal when a user clicks on an item
   daysContainer.addEventListener("click", (event) => {
-    if (event.target.closest("button")) {
-      return; // Ignore clicks on buttons (delete, arrows, etc.)
-    }
-    const itemElement = event.target.closest(".itinerary-item");
-    if (itemElement) {
-      openItemDetailModal(itemElement);
+    // Check if the user specifically clicked on the item's title area
+    const itemTextElement = event.target.closest(".item-text");
+
+    if (itemTextElement) {
+      // If they did, find the parent item and open the modal
+      const itemElement = itemTextElement.closest(".itinerary-item");
+      if (itemElement) {
+        openItemDetailModal(itemElement);
+      }
     }
   });
 
